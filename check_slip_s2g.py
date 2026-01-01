@@ -3,12 +3,10 @@ from pyzbar.pyzbar import decode
 import requests
 import json
 
-# --- KEY ของคุณ (ใส่ให้แล้ว) ---
+# --- KEY ของคุณ (ตรวจสอบแล้วถูกต้อง ไม่มีภาษาไทย) ---
 API_KEY = "b076J7gGoJj8j+hDzwwV8B29Q86sGDXjOWClZsJg0XA="
 
 def check_slip_slip2go(image_path):
-    print(f"🔍 เริ่มตรวจสอบรูป: {image_path}")
-
     # 1. อ่าน QR Code
     img = cv2.imread(image_path)
     if img is None:
@@ -16,44 +14,47 @@ def check_slip_slip2go(image_path):
 
     decoded_objects = decode(img)
     if not decoded_objects:
-        return {"success": False, "message": "หา QR Code ในรูปไม่เจอ"}
+        return {"success": False, "message": "หา QR Code ในรูปไม่เจอ (รูปอาจไม่ชัด)"}
 
     qr_payload = decoded_objects[0].data.decode('utf-8')
-    print(f"✅ อ่าน QR สำเร็จ (รหัสยาว {len(qr_payload)})")
-
-    # 2. เตรียม Header (ต้องมี Bearer)
+    
+    # 2. ตั้งค่า Header (ต้องมี Bearer ตามคู่มือ)
     headers = {
         'Authorization': f'Bearer {API_KEY}',
         'Content-Type': 'application/json'
     }
     
-    # เตรียม Body (ต้องซ้อน payload -> qrCode)
+    # Body ต้องซ้อน payload -> qrCode
     body = {
         "payload": {
             "qrCode": qr_payload
         }
     }
 
-    # 3. รายชื่อ URL ที่จะให้ระบบลองสุ่มเช็ก (อันไหนผ่านเอาอันนั้น)
+    # 3. รายชื่อ URL ที่เป็นไปได้ทั้งหมด (เพิ่ม www และ http เพื่อความชัวร์)
     possible_urls = [
-        "https://api.slip2go.com/api/verify-slip/qr-code/info",     # แบบที่ 1 (มาตรฐาน)
-        "https://slip2go.com/api/verify-slip/qr-code/info",         # แบบที่ 2 (ไม่มี api.)
-        "https://api.slip2go.com/verify-slip/qr-code/info",         # แบบที่ 3 (ไม่มี /api ซ้ำ)
+        "https://api.slip2go.com/api/verify-slip/qr-code/info",  # แบบมาตรฐาน 1
+        "https://slip2go.com/api/verify-slip/qr-code/info",      # แบบมาตรฐาน 2 (Root domain)
+        "https://www.slip2go.com/api/verify-slip/qr-code/info",  # แบบมี www
+        "http://api.slip2go.com/api/verify-slip/qr-code/info",   # แบบ http (เผื่อ https มีปัญหา)
     ]
 
-    # ลูปเพื่อลองยิงทีละ URL
+    error_logs = [] # เก็บประวัติความผิดพลาดไว้บอกผู้ใช้
+
+    # ลูปทดสอบทีละ URL
     for url in possible_urls:
         try:
-            print(f"📡 กำลังลองเชื่อมต่อ: {url}")
-            response = requests.post(url, headers=headers, json=body, timeout=10)
+            # print(f"กำลังทดสอบ: {url}") # (ดูใน Log หลังบ้าน)
+            response = requests.post(url, headers=headers, json=body, timeout=15)
             
-            # ถ้าเชื่อมต่อติด (ไม่ว่าจะผ่านหรือไม่ผ่าน)
-            if response.status_code != 404: # 404 คือหา Server ไม่เจอ (Cannot POST)
-                result = response.json()
+            # ถ้าเชื่อมต่อ Server ติด (ไม่ว่าจะผ่านหรือไม่)
+            if response.status_code != 404: 
+                # 404 = Cannot POST (ผิดที่อยู่) -> ให้ข้ามไปลองอันอื่น
+                # ถ้าไม่ใช่ 404 แสดงว่าเจอ Server ถูกตัวแล้ว!
                 
-                # ถ้าเช็กสลิปสำเร็จ (Code 200)
                 if response.status_code == 200:
-                    # ดึงข้อมูลออกมา
+                    result = response.json()
+                    # สำเร็จ!
                     if 'data' in result:
                         data = result['data']
                         return {
@@ -67,13 +68,23 @@ def check_slip_slip2go(image_path):
                     else:
                         return {"success": True, "data": result}
                 else:
-                    # เจอ Server แต่สลิปผิด (เช่น สลิปปลอม/ซ้ำ)
-                    error_msg = result.get('message', response.text)
-                    return {"success": False, "message": f"สลิปไม่ผ่าน: {error_msg}"}
+                    # เจอ Server แต่สลิปมีปัญหา (เช่น Key ผิด, สลิปซ้ำ, เครดิตหมด)
+                    try:
+                        res_json = response.json()
+                        err_msg = res_json.get('message', str(res_json))
+                    except:
+                        err_msg = response.text
+                    return {"success": False, "message": f"Server ตอบกลับ ({response.status_code}): {err_msg}"}
             
+            else:
+                error_logs.append(f"{url} -> 404 Not Found")
+
         except Exception as e:
-            print(f"⚠️ URL นี้ใช้ไม่ได้ ({e}) ข้ามไปอันถัดไป...")
+            error_logs.append(f"{url} -> Error: {str(e)}")
             continue
 
     # ถ้าลองครบทุกอันแล้วยังไม่ได้
-    return {"success": False, "message": "ระบบขัดข้อง: เชื่อมต่อ Slip2Go ไม่ได้เลยทุกช่องทาง"}
+    return {
+        "success": False, 
+        "message": f"ไม่พบ Server ที่ถูกต้อง (ตรวจสอบแล้ว {len(possible_urls)} ช่องทาง) Log: {'; '.join(error_logs)}"
+    }
