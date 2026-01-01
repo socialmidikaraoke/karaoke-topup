@@ -3,14 +3,18 @@ from pyzbar.pyzbar import decode
 import requests
 import json
 
+# Key ของคุณ
 API_KEY = "b076J7gGoJj8j+hDzwwV8B29Q86sGDXjOWCIZsJg0XA="
+
+# เลขบัญชีที่ถูกต้อง (ระบบจะยอมรับแค่สลิปที่โอนเข้าเลขนี้เท่านั้น)
+MY_ACCOUNT_NO = "020300995519" 
 
 def check_slip_slip2go(image_path):
     img = cv2.imread(image_path)
     if img is None: return {"success": False, "message": "เปิดไฟล์รูปไม่ได้"}
     
     decoded_objects = decode(img)
-    if not decoded_objects: return {"success": False, "message": "ไม่พบ QR Code"}
+    if not decoded_objects: return {"success": False, "message": "ไม่พบ QR Code ในรูป"}
     
     qr_payload = decoded_objects[0].data.decode('utf-8')
     
@@ -21,12 +25,18 @@ def check_slip_slip2go(image_path):
             'Content-Type': 'application/json',
             'Authorization': f'Bearer {API_KEY}'
         }
-        # เพิ่ม checkDuplicate ตามเอกสารที่คุณส่งมา
+        
+        # --- เพิ่มเงื่อนไขการตรวจสอบเข้มข้น ---
         body = {
             "payload": {
                 "qrCode": qr_payload,
                 "checkCondition": {
-                    "checkDuplicate": True
+                    "checkDuplicate": True,  # 1. เช็กสลิปซ้ำ
+                    "checkReceiver": [       # 2. เช็กเลขบัญชีคนรับ (ต้องตรงเป๊ะ)
+                        { 
+                            "accountNumber": MY_ACCOUNT_NO 
+                        }
+                    ]
                 }
             }
         }
@@ -40,12 +50,16 @@ def check_slip_slip2go(image_path):
                 return {
                     "success": True, 
                     "sender": d.get('sender', {}).get('displayName', 'ไม่ระบุ'),
+                    "receiver": d.get('receiver', {}).get('displayName', 'ไม่ระบุ'),
                     "amount": d.get('amount', 0),
                     "transRef": d.get('transRef', ''),
-                    "raw_data": d # ส่งกลับไปดูชื่อตัวแปร
+                    "raw_data": d
                 }
             else:
-                return {"success": True, "data": result, "raw_data": result}
+                # ถ้า API ตอบ 200 แต่ไม่มี data แปลว่า "ไม่ผ่านเงื่อนไข" (เช่น เลขบัญชีไม่ตรง)
+                error_msg = result.get('message', 'สลิปไม่ถูกต้องตามเงื่อนไข (อาจโอนผิดบัญชี)')
+                return {"success": False, "message": f"ตรวจสอบไม่ผ่าน: {error_msg}"}
+        
         else:
             return {"success": False, "message": f"Server Error ({response.status_code}): {response.text}"}
 
