@@ -1,56 +1,87 @@
 import streamlit as st
-import cv2
-import numpy as np
-from pyzbar.pyzbar import decode
-import requests
+import gspread
+from google.oauth2.service_account import Credentials
+from check_slip_s2g import check_slip_slip2go  # เรียกไฟล์เช็กสลิปมาใช้
 
-# ตั้งค่า API Key (ในขั้นตอนจริง เราจะไปซ่อนไว้ใน Secret ของเว็บ)
-API_URL = "https://developer.easyslip.com/api/v1/verify"
-API_KEY = st.secrets["API_KEY"] # ดึงคีย์จากระบบความปลอดภัย
+# --- ส่วนตั้งค่า Google Sheet ---
+# (แนะนำให้ใส่ข้อมูล Key ใน st.secrets เพื่อความปลอดภัยตอนขึ้น Cloud)
+# แต่ถ้ารันในเครื่อง ให้วางไฟล์ json ไว้โฟลเดอร์เดียวกัน
+def get_google_sheet():
+    scopes = ["https://www.googleapis.com/auth/spreadsheets"]
+    # ตรงนี้ต้องใช้ไฟล์ Key ของ Google Cloud คุณ
+    creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scopes)
+    client = gspread.authorize(creds)
+    # ใส่ชื่อ Google Sheet ของคุณตรงนี้
+    sheet = client.open("ชื่อไฟล์_Google_Sheet_ของคุณ").sheet1 
+    return sheet
 
-def check_slip(image_bytes):
-    # แปลงไฟล์ภาพที่อัปโหลดให้เป็น format ที่ OpenCV อ่านได้
-    file_bytes = np.asarray(bytearray(image_bytes.read()), dtype=np.uint8)
-    img = cv2.imdecode(file_bytes, 1)
-    
-    decoded_objects = decode(img)
-    if not decoded_objects:
-        return {"success": False, "message": "ไม่พบ QR Code"}
+# --- ฟังก์ชันค้นหาและอัปเดตสมาชิก ---
+def update_member_status(username, amount_paid):
+    try:
+        sheet = get_google_sheet()
         
-    qr_payload = decoded_objects[0].data.decode('utf-8')
-    
-    headers = {'Authorization': f'Bearer {API_KEY}', 'Content-Type': 'application/json'}
-    response = requests.post(API_URL, headers=headers, json={"payload": qr_payload})
-    
-    if response.status_code == 200 and response.json()['status'] == 200:
-        return {"success": True, "data": response.json()['data']}
-    else:
-        return {"success": False, "message": "สลิปไม่ถูกต้อง หรือเช็กไม่ได้"}
+        # ค้นหาชื่อสมาชิกในคอลัมน์ A (สมมติว่าชื่ออยู่ช่องแรก)
+        cell = sheet.find(username)
+        
+        if cell:
+            # คำนวณวันใช้งาน (สมมติ 100 บาท = 30 วัน)
+            days_to_add = 0
+            if amount_paid >= 100:
+                days_to_add = 30
+            elif amount_paid >= 50:
+                days_to_add = 15
+            
+            # สมมติวันหมดอายุอยู่คอลัมน์ B (col=2)
+            # ในที่นี้เขียนโค้ดอัปเดตง่ายๆ เป็นตัวอย่าง (คุณแก้ Logic วันที่ตรงนี้ได้)
+            current_expiry = sheet.cell(cell.row, 2).value
+            
+            # อัปเดตข้อมูลลง Sheet (ตัวอย่าง: แก้ช่องสถานะ คอลัมน์ C ให้เป็น Active)
+            sheet.update_cell(cell.row, 3, "Active") 
+            sheet.update_cell(cell.row, 4, f"เติมเงินแล้ว {amount_paid} บาท")
+            
+            return True, f"ต่ออายุเรียบร้อย! ({days_to_add} วัน)"
+        else:
+            return False, "ไม่พบชื่อสมาชิกนี้ในระบบ"
+            
+    except Exception as e:
+        return False, f"เชื่อมต่อ Google Sheet ไม่ได้: {e}"
 
-# --- ส่วนหน้าตาเว็บ ---
-st.title("ระบบเติมเงินสมาชิกคาราโอเกะ")
+# --- ส่วนหน้าจอโปรแกรม (UI) ---
+st.title("ระบบต่ออายุสมาชิกคาราโอเกะ (อัตโนมัติ)")
 
-# 1. ให้สมาชิกกรอกชื่อ (เพื่อไปเช็กใน Google Sheet)
-username = st.text_input("กรุณากรอกชื่อสมาชิก (Username)")
+# 1. กรอกชื่อสมาชิก
+user_input = st.text_input("👤 กรอกชื่อสมาชิก (Username) ของคุณ")
 
 # 2. อัปโหลดสลิป
-uploaded_file = st.file_uploader("อัปโหลดสลิปโอนเงิน", type=['jpg', 'jpeg', 'png'])
+uploaded_file = st.file_uploader("💸 อัปโหลดสลิปโอนเงิน (Slip2Go)", type=['jpg', 'jpeg', 'png'])
 
-if uploaded_file is not None and username:
-    if st.button("ตรวจสอบสลิป"):
-        with st.spinner('กำลังตรวจสอบกับธนาคาร...'):
-            result = check_slip(uploaded_file)
+if st.button("ตรวจสอบและเติมเงิน"):
+    if not user_input or not uploaded_file:
+        st.warning("กรุณากรอกชื่อและอัปโหลดสลิปให้ครบ")
+    else:
+        with st.spinner("⏳ กำลังตรวจสอบกับธนาคาร..."):
+            # A. บันทึกไฟล์รูปชั่วคราวเพื่อส่งให้ OpenCV อ่าน
+            with open("temp_slip.jpg", "wb") as f:
+                f.write(uploaded_file.getbuffer())
             
-        if result['success']:
-            amount = result['data']['amount']['amount']
-            sender = result['data']['sender']['account']['name']['th']
+            # B. เรียกใช้ระบบเช็กสลิป (ที่คุณเพิ่งทำ)
+            slip_result = check_slip_slip2go("temp_slip.jpg")
             
-            st.success(f"✅ ได้รับยอดเงิน {amount} บาท จากคุณ {sender}")
-            
-            # --- ตรงนี้ใส่โค้ดอัปเดต Google Sheet ---
-            # update_google_sheet(username, amount)
-            
-            st.balloons() # เอฟเฟกต์ลูกโป่งฉลอง
-            st.info("ระบบได้ต่ออายุสมาชิกให้คุณแล้ว ขอบคุณครับ!")
-        else:
-            st.error(f"❌ เกิดข้อผิดพลาด: {result['message']}")
+            if slip_result['success']:
+                # สลิปผ่าน! เช็กยอดเงิน
+                amount = slip_result['amount']
+                sender = slip_result['sender']
+                
+                st.info(f"✅ สลิปถูกต้อง! รับเงิน {amount} บาท จากคุณ {sender}")
+                
+                # C. วิ่งไปอัปเดต Google Sheet
+                with st.spinner("⏳ กำลังอัปเดตฐานข้อมูลสมาชิก..."):
+                    success, msg = update_member_status(user_input, amount)
+                    
+                    if success:
+                        st.success(f"🎉 สำเร็จ! {msg}")
+                        st.balloons()
+                    else:
+                        st.error(f"❌ สลิปถูก แต่หาชื่อสมาชิกไม่เจอ: {msg}")
+            else:
+                st.error(f"❌ สลิปมีปัญหา: {slip_result['message']}")
