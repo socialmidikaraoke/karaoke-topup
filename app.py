@@ -18,24 +18,29 @@ def get_google_sheet():
         scopes=scopes
     )
     client = gspread.authorize(creds)
-    # ชื่อไฟล์ต้องตรงเป๊ะๆ
-    sheet = client.open("Midi Slip System Data").sheet1 
-    return sheet
 
-# --- ฟังก์ชันอัปเดตสมาชิก (กันสลิปซ้ำ) ---
+    # ---------------------------------------------------------
+    # ✅ ระบุ ID ของไฟล์คุณโดยเฉพาะ (แม่นยำ 100%)
+    # ---------------------------------------------------------
+    SPREADSHEET_ID = "1hQRW8mJVD6yMp5v2Iv1i3hCLTR3fosWyKyTk_Ibj3YQ"
+    
+    # ใช้คำสั่ง open_by_key เพื่อเจาะจงไฟล์นี้เท่านั้น
+    return client.open_by_key(SPREADSHEET_ID).sheet1
+
+# --- ฟังก์ชันอัปเดตสมาชิก ---
 def update_member_status(user_input, amount_paid, trans_ref):
     try:
         sheet = get_google_sheet()
         
         # 1. เช็กสลิปซ้ำ (Anti-Duplicate)
-        try:
-            # ค้นหา trans_ref ใน Sheet (ถ้าเจอแปลว่าซ้ำ)
-            if trans_ref:
+        if trans_ref:
+            try:
+                # ค้นหาทั้ง Sheet ว่าเคยมีรหัสนี้ไหม
                 found = sheet.find(trans_ref)
                 if found:
                     return False, f"⛔ สลิปนี้ถูกใช้งานไปแล้วครับ! (Ref: {trans_ref})"
-        except:
-            pass # หาไม่เจอ = สลิปใหม่ (ผ่าน)
+            except:
+                pass # ถ้าหาไม่เจอ แปลว่าสลิปใหม่ (ผ่าน)
 
         # 2. ค้นหาสมาชิก
         all_data = sheet.get_all_values()
@@ -43,10 +48,12 @@ def update_member_status(user_input, amount_paid, trans_ref):
         user_input = user_input.strip()
         
         for i, row in enumerate(all_data):
-            if len(row) <= 6: continue
+            if len(row) <= 6: continue # ข้ามแถวที่ข้อมูลไม่ครบ
             
-            member_id = row[0].strip()
-            account_names = [name.strip() for name in row[6].split(',')]
+            # แปลงเป็นข้อความเพื่อความชัวร์
+            member_id = str(row[0]).strip() # Col A
+            # Col G แยกด้วยลูกน้ำ
+            account_names = [str(name).strip() for name in str(row[6]).split(',')]
             
             if user_input == member_id or user_input in account_names:
                 target_row = i + 1
@@ -56,11 +63,14 @@ def update_member_status(user_input, amount_paid, trans_ref):
             # คำนวณวัน
             days = 30 if amount_paid >= 100 else (15 if amount_paid >= 50 else 7)
             
-            # อัปเดตข้อมูล
-            sheet.update_cell(target_row, 3, "Active") 
+            # อัปเดตข้อมูลลง Sheet
+            # Col C (3) = สถานะ
+            sheet.update_cell(target_row, 3, "Active")
+            # Col D (4) = รายละเอียด
             sheet.update_cell(target_row, 4, f"เติม {amount_paid}บ. (+{days}วัน) {trans_ref}")
+            # Col E (5) = บันทึกรหัสสลิป (กันซ้ำ)
             if trans_ref:
-                sheet.update_cell(target_row, 5, trans_ref) # บันทึก Ref กันซ้ำ
+                sheet.update_cell(target_row, 5, trans_ref)
             
             return True, f"✅ ต่ออายุเรียบร้อย! ({days} วัน) ให้คุณ {user_input}"
         else:
@@ -85,7 +95,7 @@ if submit_button:
             with open("temp_slip.jpg", "wb") as f:
                 f.write(uploaded_file.getbuffer())
             
-            # เรียกใช้ฟังก์ชันเช็กสลิป
+            # ส่งไปตรวจที่ Slip2Go
             slip_result = check_slip_slip2go("temp_slip.jpg")
             
             if os.path.exists("temp_slip.jpg"):
@@ -93,18 +103,20 @@ if submit_button:
             
             if slip_result['success']:
                 amount = slip_result.get('amount', 0)
-                sender = slip_result.get('sender', '-')
                 trans_ref = slip_result.get('transRef', '')
-                
-                # --- ส่วน Debug: ถ้ารหัสอ้างอิงหาย ให้โชว์ข้อมูลดิบ ---
+
+                # กรณีฉุกเฉิน: ถ้ายังหา Ref ไม่เจอ ให้ลองกวาดหาจากตัวแปรอื่นใน raw_data
+                if not trans_ref and 'raw_data' in slip_result:
+                     raw = slip_result['raw_data']
+                     # ลองเดาชื่อตัวแปรยอดฮิต
+                     trans_ref = raw.get('transId') or raw.get('ref1') or raw.get('id') or ''
+
                 if not trans_ref:
-                    st.error("❌ ไม่พบรหัสอ้างอิงสลิป (ตรวจสอบไม่ได้)")
-                    st.warning("👇 กรุณาแคปภาพข้อมูลด้านล่างนี้ ส่งมาให้ผู้พัฒนาแก้ไขครับ:")
-                    
-                    # โชว์ข้อมูลดิบออกมาเลย
-                    st.json(slip_result.get('raw_data', 'ไม่พบข้อมูลดิบ'))
+                    st.error("❌ ไม่พบรหัสอ้างอิงสลิป (แต่ยอดเงินเข้าแล้ว)")
+                    if 'raw_data' in slip_result:
+                        st.warning("👇 ข้อมูลดิบ (แคปส่งให้ผู้พัฒนาดูเพื่อแก้ชื่อตัวแปร):")
+                        st.json(slip_result['raw_data'])
                 else:
-                    # ถ้าทุกอย่างปกติ ทำงานต่อ
                     st.info(f"✅ ยอดเงิน {amount} บาท (Ref: {trans_ref})")
                     
                     with st.spinner("⏳ กำลังบันทึกข้อมูล..."):
