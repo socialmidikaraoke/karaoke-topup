@@ -38,28 +38,17 @@ def get_google_spreadsheet():
     return client.open_by_key("1hQRW8mJVD6yMp5v2Iv1i3hCLTR3fosWyKyTk_Ibj3YQ")
 
 def get_readable_expiry(permission_str):
-    """แปลงรหัส 2569:1-2:* เป็นข้อความ 'กุมภาพันธ์ 2569'"""
     try:
         if not permission_str: return "-"
-        
         segments = [s.strip() for s in str(permission_str).split(',') if s.strip()]
         if not segments: return "-"
-        
         last_seg = segments[-1]
-        
         match = re.match(r"(\d{4}):(\d+)(?:-(\d+))?:\*", last_seg)
         if match:
             year = match.group(1)
             end_month = int(match.group(3)) if match.group(3) else int(match.group(2))
-            
-            thai_months = [
-                "", "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
-                "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"
-            ]
-            
-            month_name = thai_months[end_month]
-            return f"{month_name} {year}"
-            
+            thai_months = ["", "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"]
+            return f"{thai_months[end_month]} {year}"
         return permission_str
     except:
         return permission_str
@@ -89,7 +78,6 @@ def calculate_new_permission(current_perm_str, amount_paid):
     while months_to_add > 0:
         last_seg = segments[-1]
         match = re.match(r"(\d{4}):(\d+)(?:-(\d+))?:\*", last_seg)
-        
         if match:
             year = int(match.group(1))
             start_m = int(match.group(2))
@@ -100,11 +88,8 @@ def calculate_new_permission(current_perm_str, amount_paid):
                 take = min(months_to_add, space_left)
                 new_end = end_m + take
                 months_to_add -= take
-                
-                if start_m == new_end:
-                    new_seg = f"{year}:{start_m}:*"
-                else:
-                    new_seg = f"{year}:{start_m}-{new_end}:*"
+                if start_m == new_end: new_seg = f"{year}:{start_m}:*"
+                else: new_seg = f"{year}:{start_m}-{new_end}:*"
                 segments[-1] = new_seg
             else:
                 new_year = year + 1
@@ -118,7 +103,9 @@ def calculate_new_permission(current_perm_str, amount_paid):
 
 def is_slip_too_old(slip_date_str):
     try:
-        slip_date_clean = slip_date_str[:10]
+        # พยายามหาวันที่ในรูปแบบ YYYY-MM-DD
+        if not slip_date_str: return False, 0
+        slip_date_clean = str(slip_date_str)[:10] 
         slip_date = datetime.strptime(slip_date_clean, "%Y-%m-%d").date()
         now = datetime.now(pytz.timezone('Asia/Bangkok')).date()
         delta = now - slip_date
@@ -129,7 +116,6 @@ def is_slip_too_old(slip_date_str):
     except:
         return False, 0
 
-# 🔥 แก้ไขตรงนี้: เพิ่มพารามิเตอร์ slip_date เพื่อรับวันที่จากสลิป
 def update_member_status(user_input, amount_paid, trans_ref, slip_date):
     try:
         sh = get_google_spreadsheet()
@@ -140,8 +126,7 @@ def update_member_status(user_input, amount_paid, trans_ref, slip_date):
         if trans_ref:
             try:
                 found = history_sheet.find(trans_ref)
-                if found: 
-                    return False, f"⛔ สลิปนี้ถูกใช้งานไปแล้วครับ!" 
+                if found: return False, f"⛔ สลิปนี้ถูกใช้งานไปแล้วครับ!" 
             except: pass 
 
         all_data = member_sheet.get_all_values()
@@ -163,15 +148,13 @@ def update_member_status(user_input, amount_paid, trans_ref, slip_date):
         
         if target_row:
             new_permissions = calculate_new_permission(current_permissions, amount_paid)
-            if new_permissions == current_permissions:
-                 return False, "ยอดเงินไม่เพียงพอ (ขั้นต่ำ 100 บาท)"
+            if new_permissions == current_permissions: return False, "ยอดเงินไม่เพียงพอ (ขั้นต่ำ 100 บาท)"
 
             member_sheet.update_cell(target_row, 5, new_permissions)
             
             if trans_ref:
-                # 🔥 แก้ไขตรงนี้: ใช้วันที่จากสลิป (slip_date) แทนเวลาปัจจุบัน
-                # ถ้าไม่มี slip_date ให้ใช้เวลาปัจจุบันเป็นสำรอง
-                if slip_date:
+                # ถ้ามี slip_date (จากสลิป) ให้ใช้ ถ้าไม่มีให้ใช้เวลาปัจจุบัน
+                if slip_date and str(slip_date).strip() != "":
                     timestamp = slip_date
                 else:
                     tz = pytz.timezone('Asia/Bangkok')
@@ -183,7 +166,6 @@ def update_member_status(user_input, amount_paid, trans_ref, slip_date):
             return True, f"✅ อัปเดตสำเร็จ! โหลดได้ถึง: **{readable_date}**"
         else:
             return False, f"ไม่พบสมาชิก '{user_input}' ในระบบ"
-            
     except Exception as e:
         return False, f"System Error: {e}"
 
@@ -204,31 +186,51 @@ if submit_button:
                 f.write(uploaded_file.getbuffer())
             
             slip_result = check_slip_slip2go("temp_slip.jpg")
-            
             if os.path.exists("temp_slip.jpg"): os.remove("temp_slip.jpg")
+            
+            # --- ส่วน debug: แสดงข้อมูลดิบที่ได้จากสลิป ---
+            with st.expander("🔍 ดูข้อมูลดิบจากสลิป (Debug)"):
+                st.write(slip_result)
+            # ----------------------------------------
             
             if slip_result['success']:
                 amount = slip_result.get('amount', 0)
-                trans_ref = slip_result.get('transRef', '')
-                trans_date = slip_result.get('transDate', '') # ดึงวันที่จากสลิป
                 
-                if not trans_ref and 'raw_data' in slip_result:
-                      raw = slip_result['raw_data']
-                      trans_ref = raw.get('transId') or raw.get('ref1') or raw.get('id') or ''
+                # --- พยายามดึงวันที่และเวลาให้ครอบคลุมที่สุด ---
+                trans_ref = slip_result.get('transRef', '')
+                trans_date = slip_result.get('transDate', '')
+                trans_time = slip_result.get('transTime', '') # บาง API แยกเวลาออกมา
+                
+                # ถ้าหาไม่เจอ ลองค้นใน raw_data
+                if 'raw_data' in slip_result:
+                    raw = slip_result['raw_data']
+                    if not trans_ref: 
+                        trans_ref = raw.get('transId') or raw.get('ref1') or raw.get('id') or ''
+                    if not trans_date: 
+                        trans_date = raw.get('transDate') or raw.get('date') or raw.get('sendingBankDate') or ''
+                    if not trans_time:
+                        trans_time = raw.get('transTime') or raw.get('time') or ''
+
+                # รวมวันที่และเวลาเป็นก้อนเดียวเพื่อบันทึก
+                final_slip_datetime = trans_date
+                if trans_date and trans_time:
+                    final_slip_datetime = f"{trans_date} {trans_time}"
+                # ---------------------------------------------
 
                 if not trans_ref:
                     st.error("❌ ไม่พบรหัสอ้างอิงสลิป")
                 else:
-                    too_old, days_passed = is_slip_too_old(trans_date)
+                    # เช็คความเก่าของสลิปโดยใช้แค่วันที่ (ตัดเวลาทิ้งถ้ามี)
+                    too_old, days_passed = is_slip_too_old(str(trans_date))
                     
                     if too_old:
                         st.error(f"⛔ สลิปนี้เก่าเกินไปครับ!") 
                     else:
-                        st.success(f"✅ สลิปถูกต้อง! ({amount} บาท) วันที่โอน: {trans_date}")
+                        st.success(f"✅ สลิปถูกต้อง! ({amount} บาท) เวลาโอน: {final_slip_datetime}")
                         
                         with st.spinner("⏳ กำลังอัปเดตสิทธิ์..."):
-                            # 🔥 ส่ง trans_date เข้าไปบันทึกด้วย
-                            success, msg = update_member_status(user_input, amount, trans_ref, trans_date)
+                            # ส่ง final_slip_datetime ที่รวมร่างแล้วไปบันทึก
+                            success, msg = update_member_status(user_input, amount, trans_ref, final_slip_datetime)
                             if success:
                                 st.success(msg)
                                 st.balloons()
