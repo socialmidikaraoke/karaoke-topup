@@ -11,7 +11,7 @@ import re
 st.set_page_config(page_title="ระบบเติมเงินสมาชิก", page_icon="🎤")
 
 # =========================================================
-# 🎨 ส่วนที่เพิ่ม: ซ่อน Footer, Menu และ Header (ตามที่ขอ)
+# 🎨 ส่วนที่ซ่อน Footer, Menu และ Header
 # =========================================================
 hide_streamlit_style = """
             <style>
@@ -42,17 +42,14 @@ def get_readable_expiry(permission_str):
     try:
         if not permission_str: return "-"
         
-        # เอาตัวสุดท้ายมา (เพราะคือเดือนล่าสุดที่โหลดได้)
         segments = [s.strip() for s in str(permission_str).split(',') if s.strip()]
         if not segments: return "-"
         
         last_seg = segments[-1]
         
-        # แกะปีและเดือนสิ้นสุด
         match = re.match(r"(\d{4}):(\d+)(?:-(\d+))?:\*", last_seg)
         if match:
             year = match.group(1)
-            # ถ้ามีขีด (1-12) เอาตัวหลัง, ถ้าไม่มี (1) เอาตัวหน้า
             end_month = int(match.group(3)) if match.group(3) else int(match.group(2))
             
             thai_months = [
@@ -63,7 +60,7 @@ def get_readable_expiry(permission_str):
             month_name = thai_months[end_month]
             return f"{month_name} {year}"
             
-        return permission_str # ถ้าแกะไม่ออก โชว์ตัวเดิม
+        return permission_str
     except:
         return permission_str
 
@@ -132,7 +129,8 @@ def is_slip_too_old(slip_date_str):
     except:
         return False, 0
 
-def update_member_status(user_input, amount_paid, trans_ref):
+# 🔥 แก้ไขตรงนี้: เพิ่มพารามิเตอร์ slip_date เพื่อรับวันที่จากสลิป
+def update_member_status(user_input, amount_paid, trans_ref, slip_date):
     try:
         sh = get_google_spreadsheet()
         member_sheet = sh.get_worksheet(0) 
@@ -171,11 +169,16 @@ def update_member_status(user_input, amount_paid, trans_ref):
             member_sheet.update_cell(target_row, 5, new_permissions)
             
             if trans_ref:
-                tz = pytz.timezone('Asia/Bangkok')
-                timestamp = datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
+                # 🔥 แก้ไขตรงนี้: ใช้วันที่จากสลิป (slip_date) แทนเวลาปัจจุบัน
+                # ถ้าไม่มี slip_date ให้ใช้เวลาปัจจุบันเป็นสำรอง
+                if slip_date:
+                    timestamp = slip_date
+                else:
+                    tz = pytz.timezone('Asia/Bangkok')
+                    timestamp = datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
+                
                 history_sheet.append_row([timestamp, user_input, amount_paid, trans_ref, new_permissions])
 
-            # --- แปลงรหัสเป็นภาษาคนตรงนี้ ---
             readable_date = get_readable_expiry(new_permissions)
             return True, f"✅ อัปเดตสำเร็จ! โหลดได้ถึง: **{readable_date}**"
         else:
@@ -185,7 +188,6 @@ def update_member_status(user_input, amount_paid, trans_ref):
         return False, f"System Error: {e}"
 
 # --- UI ---
-# st.title("🎤 ระบบเติมเงินสมาชิกคาราโอเกะ") # Comment ออกตามที่ขอ
 st.info(f"🏦 โอนเงินเข้า: **ออมสิน {TARGET_BANK_NAME}** (100บ./เดือน)")
 
 with st.form("topup_form"):
@@ -208,7 +210,7 @@ if submit_button:
             if slip_result['success']:
                 amount = slip_result.get('amount', 0)
                 trans_ref = slip_result.get('transRef', '')
-                trans_date = slip_result.get('transDate', '') 
+                trans_date = slip_result.get('transDate', '') # ดึงวันที่จากสลิป
                 
                 if not trans_ref and 'raw_data' in slip_result:
                       raw = slip_result['raw_data']
@@ -222,10 +224,11 @@ if submit_button:
                     if too_old:
                         st.error(f"⛔ สลิปนี้เก่าเกินไปครับ!") 
                     else:
-                        st.success(f"✅ สลิปถูกต้อง! ({amount} บาท)")
+                        st.success(f"✅ สลิปถูกต้อง! ({amount} บาท) วันที่โอน: {trans_date}")
                         
                         with st.spinner("⏳ กำลังอัปเดตสิทธิ์..."):
-                            success, msg = update_member_status(user_input, amount, trans_ref)
+                            # 🔥 ส่ง trans_date เข้าไปบันทึกด้วย
+                            success, msg = update_member_status(user_input, amount, trans_ref, trans_date)
                             if success:
                                 st.success(msg)
                                 st.balloons()
