@@ -190,8 +190,9 @@ if submit_button:
             slip_result = check_slip_slip2go("temp_slip.jpg")
             if os.path.exists("temp_slip.jpg"): os.remove("temp_slip.jpg")
             
-            with st.expander("🔍 ดูข้อมูลดิบจากสลิป (Debug)"):
-                st.write(slip_result)
+            # ❌ ลบส่วน Debug ออกตามคำขอ
+            # with st.expander("🔍 ดูข้อมูลดิบจากสลิป (Debug)"):
+            #     st.write(slip_result)
 
             if slip_result['success']:
                 amount = slip_result.get('amount', 0)
@@ -224,24 +225,52 @@ if submit_button:
                 # =======================================================
                 # 🛠️ ส่วนแก้ไข 2: การดึงชื่อผู้โอน (Sender Name)
                 # =======================================================
-                # ลองดึงจาก raw_data -> sender -> account -> name (ตาม JSON ของคุณ)
                 sender_name = "ไม่ระบุ"
                 try:
-                    # ลองเจาะเข้าไปตาม path ใน JSON
                     sender_acc_name = raw.get('sender', {}).get('account', {}).get('name')
                     if sender_acc_name:
                         sender_name = sender_acc_name
                     else:
-                        # ถ้าไม่มี ให้ลองหาแบบอื่น
                         sender_name = slip_result.get('sender', 'ไม่ระบุ')
-                        # บางที sender เป็น dict แต่ไม่มีชื่อ
                         if isinstance(sender_name, dict):
                              sender_name = sender_name.get('account', {}).get('name', 'ไม่ระบุ')
                 except:
                     pass
                 
-                # โชว์ให้เห็นว่าดึงอะไรมาได้บ้าง
-                st.info(f"📅 วันที่: **{final_slip_datetime}** | 👤 ผู้โอน: **{sender_name}**")
+                # =======================================================
+                # 🛠️ ส่วนแก้ไข 3: จัดรูปแบบการแสดงผล (ใหม่)
+                # รูปแบบ: วันที่โอน : 01-01-2569 | เวลา 11:08:45 | 👤 ผู้โอน :
+                # =======================================================
+                display_msg = f"วันที่: {final_slip_datetime} | ผู้โอน: {sender_name}" # ค่าเริ่มต้นเผื่อแปลงไม่ได้
+
+                try:
+                    # พยายามแปลง String เป็น Datetime Object
+                    clean_dt_str = str(final_slip_datetime).replace('Z', '+00:00')
+                    if 'T' in clean_dt_str:
+                         dt_obj = datetime.fromisoformat(clean_dt_str)
+                    else:
+                         dt_obj = datetime.strptime(clean_dt_str[:19], "%Y-%m-%d %H:%M:%S")
+
+                    # บังคับ Timezone เป็น Asia/Bangkok
+                    bangkok_tz = pytz.timezone('Asia/Bangkok')
+                    if dt_obj.tzinfo is None:
+                        dt_obj = bangkok_tz.localize(dt_obj)
+                    else:
+                        dt_obj = dt_obj.astimezone(bangkok_tz)
+
+                    # แยกส่วนประกอบ
+                    year_be = dt_obj.year + 543
+                    day = str(dt_obj.day).zfill(2)
+                    month = str(dt_obj.month).zfill(2)
+                    time_str = dt_obj.strftime("%H:%M:%S")
+                    
+                    # ประกอบร่างใหม่
+                    display_msg = f"วันที่โอน : {day}-{month}-{year_be} | เวลา {time_str} | 👤 ผู้โอน : {sender_name}"
+                except Exception as e:
+                    # ถ้าแปลงไม่ได้ให้ใช้แบบเดิมไปก่อน
+                    display_msg = f"วันที่โอน : {final_slip_datetime} (Raw) | 👤 ผู้โอน : {sender_name}"
+
+                st.info(display_msg)
                 # =======================================================
 
                 trans_ref = slip_result.get('transRef') or \
