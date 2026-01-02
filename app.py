@@ -14,7 +14,7 @@ st.set_page_config(page_title="ระบบเติมเงินสมาช�
 # =========================================================
 TARGET_BANK_NAME = "020300995519" 
 PRICE_PER_MONTH = 100
-SLIP_AGE_LIMIT_DAYS = 30  # ⛔ สลิปต้องโอนมาไม่เกิน 30 วัน (ป้องกันสลิปปีที่แล้ว)
+SLIP_AGE_LIMIT_DAYS = 30  
 # =========================================================
 
 def get_google_spreadsheet():
@@ -22,6 +22,36 @@ def get_google_spreadsheet():
     creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scopes)
     client = gspread.authorize(creds)
     return client.open_by_key("1hQRW8mJVD6yMp5v2Iv1i3hCLTR3fosWyKyTk_Ibj3YQ")
+
+def get_readable_expiry(permission_str):
+    """แปลงรหัส 2569:1-2:* เป็นข้อความ 'กุมภาพันธ์ 2569'"""
+    try:
+        if not permission_str: return "-"
+        
+        # เอาตัวสุดท้ายมา (เพราะคือเดือนล่าสุดที่โหลดได้)
+        segments = [s.strip() for s in str(permission_str).split(',') if s.strip()]
+        if not segments: return "-"
+        
+        last_seg = segments[-1]
+        
+        # แกะปีและเดือนสิ้นสุด
+        match = re.match(r"(\d{4}):(\d+)(?:-(\d+))?:\*", last_seg)
+        if match:
+            year = match.group(1)
+            # ถ้ามีขีด (1-12) เอาตัวหลัง, ถ้าไม่มี (1) เอาตัวหน้า
+            end_month = int(match.group(3)) if match.group(3) else int(match.group(2))
+            
+            thai_months = [
+                "", "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
+                "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"
+            ]
+            
+            month_name = thai_months[end_month]
+            return f"{month_name} {year}"
+            
+        return permission_str # ถ้าแกะไม่ออก โชว์ตัวเดิม
+    except:
+        return permission_str
 
 def calculate_new_permission(current_perm_str, amount_paid):
     months_to_add = int(amount_paid // PRICE_PER_MONTH)
@@ -76,25 +106,16 @@ def calculate_new_permission(current_perm_str, amount_paid):
     return " , ".join(segments)
 
 def is_slip_too_old(slip_date_str):
-    """ฟังก์ชันเช็กอายุสลิป"""
     try:
-        # รูปแบบวันที่จาก Slip2Go มักจะเป็น ISO 8601 (เช่น 2025-01-02T14:30:00...)
-        # เราตัดเอาแค่ 10 ตัวแรก (YYYY-MM-DD) มาเทียบ
         slip_date_clean = slip_date_str[:10]
         slip_date = datetime.strptime(slip_date_clean, "%Y-%m-%d").date()
-        
         now = datetime.now(pytz.timezone('Asia/Bangkok')).date()
-        
-        # คำนวณส่วนต่าง
         delta = now - slip_date
-        
-        # ถ้าสลิปเก่ากว่าจำนวนวันที่ตั้งไว้ -> return True (แปลว่าเก่าเกิน)
         if delta.days > SLIP_AGE_LIMIT_DAYS:
             return True, delta.days
         else:
             return False, delta.days
     except:
-        # ถ้าแกะวันที่ไม่ออก ยอมให้ผ่านไปก่อน (หรือจะปรับให้ False เพื่อความเข้มงวดก็ได้)
         return False, 0
 
 def update_member_status(user_input, amount_paid, trans_ref):
@@ -107,7 +128,8 @@ def update_member_status(user_input, amount_paid, trans_ref):
         if trans_ref:
             try:
                 found = history_sheet.find(trans_ref)
-                if found: return False, f"⛔ สลิปนี้ถูกใช้งานไปแล้วครับ! (Ref: {trans_ref})"
+                if found: 
+                    return False, f"⛔ สลิปนี้ถูกใช้งานไปแล้วครับ!" 
             except: pass 
 
         all_data = member_sheet.get_all_values()
@@ -139,7 +161,9 @@ def update_member_status(user_input, amount_paid, trans_ref):
                 timestamp = datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
                 history_sheet.append_row([timestamp, user_input, amount_paid, trans_ref, new_permissions])
 
-            return True, f"✅ อัปเดตสำเร็จ! ({new_permissions})"
+            # --- แปลงรหัสเป็นภาษาคนตรงนี้ ---
+            readable_date = get_readable_expiry(new_permissions)
+            return True, f"✅ อัปเดตสำเร็จ! โหลดได้ถึง: **{readable_date}**"
         else:
             return False, f"ไม่พบสมาชิก '{user_input}' ในระบบ"
             
@@ -148,7 +172,7 @@ def update_member_status(user_input, amount_paid, trans_ref):
 
 # --- UI ---
 st.title("🎤 ระบบเติมเงินสมาชิกคาราโอเกะ")
-st.info(f"🏦 โอนเงินเข้า: **ออมสิน {TARGET_BANK_NAME}** (100บ./เดือน)\n⛔ ไม่รับสลิปที่เก่าเกิน {SLIP_AGE_LIMIT_DAYS} วัน")
+st.info(f"🏦 โอนเงินเข้า: **ออมสิน {TARGET_BANK_NAME}** (100บ./เดือน)")
 
 with st.form("topup_form"):
     user_input = st.text_input("👤 Member ID หรือ ชื่อบัญชี")
@@ -170,7 +194,7 @@ if submit_button:
             if slip_result['success']:
                 amount = slip_result.get('amount', 0)
                 trans_ref = slip_result.get('transRef', '')
-                trans_date = slip_result.get('transDate', '') # วันที่จากสลิป
+                trans_date = slip_result.get('transDate', '') 
                 
                 if not trans_ref and 'raw_data' in slip_result:
                      raw = slip_result['raw_data']
@@ -179,20 +203,17 @@ if submit_button:
                 if not trans_ref:
                     st.error("❌ ไม่พบรหัสอ้างอิงสลิป")
                 else:
-                    # ===================================================
-                    # ⏳ เช็กอายุสลิป (กันเอาสลิปปีที่แล้วมาใช้)
-                    # ===================================================
                     too_old, days_passed = is_slip_too_old(trans_date)
                     
                     if too_old:
-                        st.error(f"⛔ สลิปนี้เก่าเกินไปครับ! (โอนเมื่อ {days_passed} วันที่แล้ว)")
-                        st.write("ระบบรับเฉพาะสลิปปัจจุบันเท่านั้น")
+                        st.error(f"⛔ สลิปนี้เก่าเกินไปครับ!") 
                     else:
-                        st.success(f"✅ สลิปถูกต้อง! ({amount} บาท) โอนเมื่อ {trans_date}")
-                        with st.spinner("⏳ กำลังคำนวณสิทธิ์..."):
+                        st.success(f"✅ สลิปถูกต้อง! ({amount} บาท)")
+                        
+                        with st.spinner("⏳ กำลังอัปเดตสิทธิ์..."):
                             success, msg = update_member_status(user_input, amount, trans_ref)
                             if success:
-                                st.success(msg)
+                                st.success(msg) # ข้อความจะโชว์ว่า "โหลดได้ถึง: กุมภาพันธ์ 2569"
                                 st.balloons()
                             else:
                                 st.error(msg)
