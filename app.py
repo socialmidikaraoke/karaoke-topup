@@ -7,12 +7,26 @@ from datetime import datetime
 import pytz
 import re
 
+# ตั้งค่าหน้าเว็บ
 st.set_page_config(page_title="ระบบเติมเงินสมาชิก", page_icon="🎤")
+
+# =========================================================
+# 🎨 ส่วนที่เพิ่ม: ซ่อน Footer, Menu และ Header (ตามที่ขอ)
+# =========================================================
+hide_streamlit_style = """
+            <style>
+            #MainMenu {visibility: hidden;}
+            footer {visibility: hidden;}
+            header {visibility: hidden;}
+            </style>
+            """
+st.markdown(hide_streamlit_style, unsafe_allow_html=True)
+# =========================================================
 
 # =========================================================
 # 🔒 ตั้งค่าความปลอดภัย
 # =========================================================
-TARGET_BANK_NAME = "020300995519" 
+TARGET_BANK_NAME = "020300995519"
 PRICE_PER_MONTH = 100
 SLIP_AGE_LIMIT_DAYS = 30  
 # =========================================================
@@ -171,7 +185,7 @@ def update_member_status(user_input, amount_paid, trans_ref):
         return False, f"System Error: {e}"
 
 # --- UI ---
-#st.title("🎤 ระบบเติมเงินสมาชิกคาราโอเกะ")
+# st.title("🎤 ระบบเติมเงินสมาชิกคาราโอเกะ") # Comment ออกตามที่ขอ
 st.info(f"🏦 โอนเงินเข้า: **ออมสิน {TARGET_BANK_NAME}** (100บ./เดือน)")
 
 with st.form("topup_form"):
@@ -197,8 +211,8 @@ if submit_button:
                 trans_date = slip_result.get('transDate', '') 
                 
                 if not trans_ref and 'raw_data' in slip_result:
-                     raw = slip_result['raw_data']
-                     trans_ref = raw.get('transId') or raw.get('ref1') or raw.get('id') or ''
+                      raw = slip_result['raw_data']
+                      trans_ref = raw.get('transId') or raw.get('ref1') or raw.get('id') or ''
 
                 if not trans_ref:
                     st.error("❌ ไม่พบรหัสอ้างอิงสลิป")
@@ -213,11 +227,9 @@ if submit_button:
                         with st.spinner("⏳ กำลังอัปเดตสิทธิ์..."):
                             success, msg = update_member_status(user_input, amount, trans_ref)
                             if success:
-                                st.success(msg) # ข้อความจะโชว์ว่า "โหลดได้ถึง: กุมภาพันธ์ 2569"
+                                st.success(msg)
                                 st.balloons()
                             else:
                                 st.error(msg)
             else:
                 st.error(f"❌ {slip_result['message']}")
-
-
