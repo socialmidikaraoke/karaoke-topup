@@ -5,8 +5,6 @@ import json
 
 # Key ของคุณ
 API_KEY = "b076J7gGoJj8j+hDzwwV8B29Q86sGDXjOWCIZsJg0XA="
-
-# เลขบัญชีที่ถูกต้อง (ระบบจะยอมรับแค่สลิปที่โอนเข้าเลขนี้เท่านั้น)
 MY_ACCOUNT_NO = "020300995519" 
 
 def check_slip_slip2go(image_path):
@@ -26,17 +24,12 @@ def check_slip_slip2go(image_path):
             'Authorization': f'Bearer {API_KEY}'
         }
         
-        # --- เพิ่มเงื่อนไขการตรวจสอบเข้มข้น ---
         body = {
             "payload": {
                 "qrCode": qr_payload,
                 "checkCondition": {
-                    "checkDuplicate": True,  # 1. เช็กสลิปซ้ำ
-                    "checkReceiver": [       # 2. เช็กเลขบัญชีคนรับ (ต้องตรงเป๊ะ)
-                        { 
-                            "accountNumber": MY_ACCOUNT_NO 
-                        }
-                    ]
+                    "checkDuplicate": True,
+                    "checkReceiver": [{"accountNumber": MY_ACCOUNT_NO}]
                 }
             }
         }
@@ -53,15 +46,16 @@ def check_slip_slip2go(image_path):
                     "receiver": d.get('receiver', {}).get('displayName', 'ไม่ระบุ'),
                     "amount": d.get('amount', 0),
                     "transRef": d.get('transRef', ''),
+                    # ดึงวันที่โอนมาด้วย (สำคัญมาก!)
+                    "transDate": d.get('transDate') or d.get('transTime') or "", 
                     "raw_data": d
                 }
             else:
-                # ถ้า API ตอบ 200 แต่ไม่มี data แปลว่า "ไม่ผ่านเงื่อนไข" (เช่น เลขบัญชีไม่ตรง)
-                error_msg = result.get('message', 'สลิปไม่ถูกต้องตามเงื่อนไข (อาจโอนผิดบัญชี)')
+                error_msg = result.get('message', 'สลิปไม่ถูกต้องตามเงื่อนไข')
                 return {"success": False, "message": f"ตรวจสอบไม่ผ่าน: {error_msg}"}
         
         else:
-            return {"success": False, "message": f"Server Error ({response.status_code}): {response.text}"}
+            return {"success": False, "message": f"Server Error: {response.text}"}
 
     except Exception as e:
         return {"success": False, "message": f"เชื่อมต่อไม่ได้: {e}"}
