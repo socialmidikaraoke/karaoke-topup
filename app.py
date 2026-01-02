@@ -171,7 +171,7 @@ def update_member_status(user_input, amount_paid, trans_ref):
         return False, f"System Error: {e}"
 
 # --- UI ---
-st.title("🎤 ระบบเติมเงินสมาชิกคาราโอเกะ")
+#st.title("🎤 ระบบเติมเงินสมาชิกคาราโอเกะ")
 st.info(f"🏦 โอนเงินเข้า: **ออมสิน {TARGET_BANK_NAME}** (100บ./เดือน)")
 
 with st.form("topup_form"):
@@ -219,4 +219,5 @@ if submit_button:
                                 st.error(msg)
             else:
                 st.error(f"❌ {slip_result['message']}")
+
 
