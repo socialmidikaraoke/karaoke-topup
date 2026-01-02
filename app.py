@@ -103,7 +103,6 @@ def calculate_new_permission(current_perm_str, amount_paid):
 
 def is_slip_too_old(slip_date_str):
     try:
-        # พยายามหาวันที่ในรูปแบบ YYYY-MM-DD
         if not slip_date_str: return False, 0
         slip_date_clean = str(slip_date_str)[:10] 
         slip_date = datetime.strptime(slip_date_clean, "%Y-%m-%d").date()
@@ -116,7 +115,8 @@ def is_slip_too_old(slip_date_str):
     except:
         return False, 0
 
-def update_member_status(user_input, amount_paid, trans_ref, slip_date):
+# 🔥 แก้ไข: เพิ่ม parameter 'sender_name'
+def update_member_status(user_input, amount_paid, trans_ref, slip_date, sender_name):
     try:
         sh = get_google_spreadsheet()
         member_sheet = sh.get_worksheet(0) 
@@ -153,14 +153,16 @@ def update_member_status(user_input, amount_paid, trans_ref, slip_date):
             member_sheet.update_cell(target_row, 5, new_permissions)
             
             if trans_ref:
-                # ถ้ามี slip_date (จากสลิป) ให้ใช้ ถ้าไม่มีให้ใช้เวลาปัจจุบัน
                 if slip_date and str(slip_date).strip() != "":
-                    timestamp = slip_date
+                    # แปลงรูปแบบเวลาให้สวยงาม (ตัดตัว T และ Timezone ออกถ้ามี)
+                    timestamp = str(slip_date).replace('T', ' ').split('+')[0]
                 else:
                     tz = pytz.timezone('Asia/Bangkok')
                     timestamp = datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
                 
-                history_sheet.append_row([timestamp, user_input, amount_paid, trans_ref, new_permissions])
+                # 🔥 แก้ไข: เพิ่ม sender_name ลงในบันทึก (คอลัมน์ใหม่)
+                # ลำดับข้อมูล: วันเวลา | สมาชิก | ยอดเงิน | รหัสสลิป | ชื่อผู้โอน | สิทธิ์ใหม่
+                history_sheet.append_row([timestamp, user_input, amount_paid, trans_ref, sender_name, new_permissions])
 
             readable_date = get_readable_expiry(new_permissions)
             return True, f"✅ อัปเดตสำเร็จ! โหลดได้ถึง: **{readable_date}**"
@@ -188,49 +190,78 @@ if submit_button:
             slip_result = check_slip_slip2go("temp_slip.jpg")
             if os.path.exists("temp_slip.jpg"): os.remove("temp_slip.jpg")
             
-            # --- ส่วน debug: แสดงข้อมูลดิบที่ได้จากสลิป ---
             with st.expander("🔍 ดูข้อมูลดิบจากสลิป (Debug)"):
                 st.write(slip_result)
-            # ----------------------------------------
-            
+
             if slip_result['success']:
                 amount = slip_result.get('amount', 0)
+                raw = slip_result.get('raw_data', {})
                 
-                # --- พยายามดึงวันที่และเวลาให้ครอบคลุมที่สุด ---
-                trans_ref = slip_result.get('transRef', '')
-                trans_date = slip_result.get('transDate', '')
-                trans_time = slip_result.get('transTime', '') # บาง API แยกเวลาออกมา
+                # =======================================================
+                # 🛠️ ส่วนแก้ไข 1: การดึงวันเวลา (เพิ่ม dateTime)
+                # =======================================================
+                d = slip_result.get('transDate') or \
+                    slip_result.get('date') or \
+                    raw.get('dateTime') or \
+                    raw.get('transDate') or \
+                    raw.get('date') or \
+                    raw.get('sendingBankDate')
                 
-                # ถ้าหาไม่เจอ ลองค้นใน raw_data
-                if 'raw_data' in slip_result:
-                    raw = slip_result['raw_data']
-                    if not trans_ref: 
-                        trans_ref = raw.get('transId') or raw.get('ref1') or raw.get('id') or ''
-                    if not trans_date: 
-                        trans_date = raw.get('transDate') or raw.get('date') or raw.get('sendingBankDate') or ''
-                    if not trans_time:
-                        trans_time = raw.get('transTime') or raw.get('time') or ''
+                t = slip_result.get('transTime') or \
+                    slip_result.get('time') or \
+                    raw.get('transTime') or \
+                    raw.get('time')
 
-                # รวมวันที่และเวลาเป็นก้อนเดียวเพื่อบันทึก
-                final_slip_datetime = trans_date
-                if trans_date and trans_time:
-                    final_slip_datetime = f"{trans_date} {trans_time}"
-                # ---------------------------------------------
+                final_slip_datetime = ""
+                # ถ้าเจอ d ที่เป็น DateTime แบบยาว (เช่น 2026-01-01T11...) ให้ใช้เลย
+                if d and 'T' in str(d):
+                    final_slip_datetime = str(d)
+                elif d and t:
+                    final_slip_datetime = f"{d} {t}"
+                elif d:
+                    final_slip_datetime = str(d)
+                
+                # =======================================================
+                # 🛠️ ส่วนแก้ไข 2: การดึงชื่อผู้โอน (Sender Name)
+                # =======================================================
+                # ลองดึงจาก raw_data -> sender -> account -> name (ตาม JSON ของคุณ)
+                sender_name = "ไม่ระบุ"
+                try:
+                    # ลองเจาะเข้าไปตาม path ใน JSON
+                    sender_acc_name = raw.get('sender', {}).get('account', {}).get('name')
+                    if sender_acc_name:
+                        sender_name = sender_acc_name
+                    else:
+                        # ถ้าไม่มี ให้ลองหาแบบอื่น
+                        sender_name = slip_result.get('sender', 'ไม่ระบุ')
+                        # บางที sender เป็น dict แต่ไม่มีชื่อ
+                        if isinstance(sender_name, dict):
+                             sender_name = sender_name.get('account', {}).get('name', 'ไม่ระบุ')
+                except:
+                    pass
+                
+                # โชว์ให้เห็นว่าดึงอะไรมาได้บ้าง
+                st.info(f"📅 วันที่: **{final_slip_datetime}** | 👤 ผู้โอน: **{sender_name}**")
+                # =======================================================
+
+                trans_ref = slip_result.get('transRef') or \
+                            raw.get('transId') or \
+                            raw.get('ref1') or \
+                            raw.get('id') or ''
 
                 if not trans_ref:
-                    st.error("❌ ไม่พบรหัสอ้างอิงสลิป")
+                    st.error("❌ ไม่พบรหัสอ้างอิงสลิป (Transaction ID)")
                 else:
-                    # เช็คความเก่าของสลิปโดยใช้แค่วันที่ (ตัดเวลาทิ้งถ้ามี)
-                    too_old, days_passed = is_slip_too_old(str(trans_date))
+                    too_old, days_passed = is_slip_too_old(str(final_slip_datetime))
                     
                     if too_old:
-                        st.error(f"⛔ สลิปนี้เก่าเกินไปครับ!") 
+                        st.error(f"⛔ สลิปนี้เก่าเกินไปครับ! ({days_passed} วัน)") 
                     else:
-                        st.success(f"✅ สลิปถูกต้อง! ({amount} บาท) เวลาโอน: {final_slip_datetime}")
+                        st.success(f"✅ สลิปถูกต้อง! ({amount} บาท)")
                         
                         with st.spinner("⏳ กำลังอัปเดตสิทธิ์..."):
-                            # ส่ง final_slip_datetime ที่รวมร่างแล้วไปบันทึก
-                            success, msg = update_member_status(user_input, amount, trans_ref, final_slip_datetime)
+                            # ส่ง sender_name ไปบันทึกด้วย
+                            success, msg = update_member_status(user_input, amount, trans_ref, final_slip_datetime, sender_name)
                             if success:
                                 st.success(msg)
                                 st.balloons()
