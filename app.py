@@ -175,7 +175,7 @@ st.title("🎤 ระบบเติมเงินสมาชิกคาร�
 st.info(f"🏦 โอนเงินเข้า: **ออมสิน {TARGET_BANK_NAME}** (100บ./เดือน)")
 
 with st.form("topup_form"):
-    user_input = st.text_input("👤 Member ID หรือ ชื่อบัญชี")
+    user_input = st.text_input("👤 Member ID (กรอกให้ถูกต้อง เช่น MIDI-Test1)")
     uploaded_file = st.file_uploader("💸 อัปโหลดสลิปโอนเงิน", type=['jpg', 'png', 'jpeg'])
     submit_button = st.form_submit_button("ตรวจสอบและเติมเงิน")
 
@@ -219,3 +219,4 @@ if submit_button:
                                 st.error(msg)
             else:
                 st.error(f"❌ {slip_result['message']}")
+
