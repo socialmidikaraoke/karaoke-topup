@@ -187,7 +187,7 @@ default_member_id = st.query_params.get("member_id", "")
 
 with st.form("topup_form"):
     # ✅ 2. นำค่าที่ดึงได้มาใส่เป็นค่าเริ่มต้น (value)
-    user_input = st.text_input("👤 Member ID (กรอกให้ถูกต้อง เช่น MIDI-Test1)", value=default_member_id)
+    user_input = st.text_input("👤 Member ID (เช็กความถูกต้อง *ระบบใส่ให้อัตโนมัติ)", value=default_member_id)
     
     uploaded_file = st.file_uploader("💸 อัปโหลดสลิปโอนเงิน", type=['jpg', 'png', 'jpeg'])
     submit_button = st.form_submit_button("ตรวจสอบและเติมเงิน")
@@ -291,3 +291,4 @@ if submit_button:
                                 st.error(msg)
             else:
                 st.error(f"❌ {slip_result['message']}")
+
