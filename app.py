@@ -115,7 +115,7 @@ def is_slip_too_old(slip_date_str):
     except:
         return False, 0
 
-# 🔥 แก้ไข: เพิ่ม parameter 'sender_name'
+# 🔥 แก้ไข: รองรับตัวพิมพ์เล็ก/ใหญ่ (Case Insensitive)
 def update_member_status(user_input, amount_paid, trans_ref, slip_date, sender_name):
     try:
         sh = get_google_spreadsheet()
@@ -133,6 +133,7 @@ def update_member_status(user_input, amount_paid, trans_ref, slip_date, sender_n
         target_row = None
         current_permissions = ""
         user_input = str(user_input).strip()
+        user_input_lower = user_input.lower() # 🔥 แปลงสิ่งที่ลูกค้ากรอกเป็นตัวเล็ก
         
         for i, row in enumerate(all_data):
             if len(row) <= 1: continue 
@@ -141,7 +142,11 @@ def update_member_status(user_input, amount_paid, trans_ref, slip_date, sender_n
             if len(row) > 6:
                 account_names = [str(name).strip() for name in str(row[6]).split(',')]
             
-            if user_input == member_id or user_input in account_names:
+            # 🔥 เปรียบเทียบโดยแปลงเป็นตัวเล็กทั้งหมด
+            member_id_lower = member_id.lower()
+            account_names_lower = [name.lower() for name in account_names]
+
+            if user_input_lower == member_id_lower or user_input_lower in account_names_lower:
                 target_row = i + 1
                 if len(row) > 4: current_permissions = row[4] 
                 break
@@ -154,14 +159,12 @@ def update_member_status(user_input, amount_paid, trans_ref, slip_date, sender_n
             
             if trans_ref:
                 if slip_date and str(slip_date).strip() != "":
-                    # แปลงรูปแบบเวลาให้สวยงาม (ตัดตัว T และ Timezone ออกถ้ามี)
                     timestamp = str(slip_date).replace('T', ' ').split('+')[0]
                 else:
                     tz = pytz.timezone('Asia/Bangkok')
                     timestamp = datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
                 
-                # 🔥 แก้ไข: เพิ่ม sender_name ลงในบันทึก (คอลัมน์ใหม่)
-                # ลำดับข้อมูล: วันเวลา | สมาชิก | ยอดเงิน | รหัสสลิป | ชื่อผู้โอน | สิทธิ์ใหม่
+                # บันทึกข้อมูล (ใช้ user_input เดิมที่ลูกค้ากรอกมาแสดงใน log)
                 history_sheet.append_row([timestamp, user_input, amount_paid, trans_ref, sender_name, new_permissions])
 
             readable_date = get_readable_expiry(new_permissions)
@@ -190,17 +193,11 @@ if submit_button:
             slip_result = check_slip_slip2go("temp_slip.jpg")
             if os.path.exists("temp_slip.jpg"): os.remove("temp_slip.jpg")
             
-            # ❌ ลบส่วน Debug ออกตามคำขอ
-            # with st.expander("🔍 ดูข้อมูลดิบจากสลิป (Debug)"):
-            #     st.write(slip_result)
-
             if slip_result['success']:
                 amount = slip_result.get('amount', 0)
                 raw = slip_result.get('raw_data', {})
                 
-                # =======================================================
-                # 🛠️ ส่วนแก้ไข 1: การดึงวันเวลา (เพิ่ม dateTime)
-                # =======================================================
+                # ดึงวันเวลา
                 d = slip_result.get('transDate') or \
                     slip_result.get('date') or \
                     raw.get('dateTime') or \
@@ -214,7 +211,6 @@ if submit_button:
                     raw.get('time')
 
                 final_slip_datetime = ""
-                # ถ้าเจอ d ที่เป็น DateTime แบบยาว (เช่น 2026-01-01T11...) ให้ใช้เลย
                 if d and 'T' in str(d):
                     final_slip_datetime = str(d)
                 elif d and t:
@@ -222,9 +218,7 @@ if submit_button:
                 elif d:
                     final_slip_datetime = str(d)
                 
-                # =======================================================
-                # 🛠️ ส่วนแก้ไข 2: การดึงชื่อผู้โอน (Sender Name)
-                # =======================================================
+                # ดึงชื่อผู้โอน
                 sender_name = "ไม่ระบุ"
                 try:
                     sender_acc_name = raw.get('sender', {}).get('account', {}).get('name')
@@ -237,41 +231,31 @@ if submit_button:
                 except:
                     pass
                 
-                # =======================================================
-                # 🛠️ ส่วนแก้ไข 3: จัดรูปแบบการแสดงผล (ใหม่)
-                # รูปแบบ: วันที่โอน : 01-01-2569 | เวลา 11:08:45 | 👤 ผู้โอน :
-                # =======================================================
-                display_msg = f"วันที่: {final_slip_datetime} | ผู้โอน: {sender_name}" # ค่าเริ่มต้นเผื่อแปลงไม่ได้
-
+                # แสดงผลวันที่แบบไทย + พ.ศ.
+                display_msg = f"วันที่: {final_slip_datetime} | ผู้โอน: {sender_name}"
                 try:
-                    # พยายามแปลง String เป็น Datetime Object
                     clean_dt_str = str(final_slip_datetime).replace('Z', '+00:00')
                     if 'T' in clean_dt_str:
                          dt_obj = datetime.fromisoformat(clean_dt_str)
                     else:
                          dt_obj = datetime.strptime(clean_dt_str[:19], "%Y-%m-%d %H:%M:%S")
 
-                    # บังคับ Timezone เป็น Asia/Bangkok
                     bangkok_tz = pytz.timezone('Asia/Bangkok')
                     if dt_obj.tzinfo is None:
                         dt_obj = bangkok_tz.localize(dt_obj)
                     else:
                         dt_obj = dt_obj.astimezone(bangkok_tz)
 
-                    # แยกส่วนประกอบ
                     year_be = dt_obj.year + 543
                     day = str(dt_obj.day).zfill(2)
                     month = str(dt_obj.month).zfill(2)
                     time_str = dt_obj.strftime("%H:%M:%S")
                     
-                    # ประกอบร่างใหม่
                     display_msg = f"วันที่โอน : {day}-{month}-{year_be} | เวลา {time_str} | 👤 ผู้โอน : {sender_name}"
                 except Exception as e:
-                    # ถ้าแปลงไม่ได้ให้ใช้แบบเดิมไปก่อน
                     display_msg = f"วันที่โอน : {final_slip_datetime} (Raw) | 👤 ผู้โอน : {sender_name}"
 
                 st.info(display_msg)
-                # =======================================================
 
                 trans_ref = slip_result.get('transRef') or \
                             raw.get('transId') or \
@@ -289,7 +273,6 @@ if submit_button:
                         st.success(f"✅ สลิปถูกต้อง! ({amount} บาท)")
                         
                         with st.spinner("⏳ กำลังอัปเดตสิทธิ์..."):
-                            # ส่ง sender_name ไปบันทึกด้วย
                             success, msg = update_member_status(user_input, amount, trans_ref, final_slip_datetime, sender_name)
                             if success:
                                 st.success(msg)
