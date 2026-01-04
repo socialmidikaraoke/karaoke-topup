@@ -11,13 +11,18 @@ import re
 st.set_page_config(page_title="ระบบเติมเงินสมาชิก", page_icon="🎤")
 
 # =========================================================
-# 🎨 ส่วนที่ซ่อน Footer, Menu และ Header
+# 🎨 ส่วนที่ซ่อน Footer, Menu, Header และ Input Instructions
 # =========================================================
 hide_streamlit_style = """
             <style>
             #MainMenu {visibility: hidden;}
             footer {visibility: hidden;}
             header {visibility: hidden;}
+            
+            /* 🔥 ซ่อนคำว่า Press Enter to submit form */
+            [data-testid="InputInstructions"] {
+                display: none;
+            }
             </style>
             """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
@@ -115,7 +120,7 @@ def is_slip_too_old(slip_date_str):
     except:
         return False, 0
 
-# 🔥 แก้ไข: รองรับตัวพิมพ์เล็ก/ใหญ่ (Case Insensitive)
+# 🔥 รองรับตัวพิมพ์เล็ก/ใหญ่ (Case Insensitive)
 def update_member_status(user_input, amount_paid, trans_ref, slip_date, sender_name):
     try:
         sh = get_google_spreadsheet()
@@ -133,7 +138,7 @@ def update_member_status(user_input, amount_paid, trans_ref, slip_date, sender_n
         target_row = None
         current_permissions = ""
         user_input = str(user_input).strip()
-        user_input_lower = user_input.lower() # 🔥 แปลงสิ่งที่ลูกค้ากรอกเป็นตัวเล็ก
+        user_input_lower = user_input.lower() # แปลงสิ่งที่ลูกค้ากรอกเป็นตัวเล็ก
         
         for i, row in enumerate(all_data):
             if len(row) <= 1: continue 
@@ -142,7 +147,7 @@ def update_member_status(user_input, amount_paid, trans_ref, slip_date, sender_n
             if len(row) > 6:
                 account_names = [str(name).strip() for name in str(row[6]).split(',')]
             
-            # 🔥 เปรียบเทียบโดยแปลงเป็นตัวเล็กทั้งหมด
+            # เปรียบเทียบโดยแปลงเป็นตัวเล็กทั้งหมด
             member_id_lower = member_id.lower()
             account_names_lower = [name.lower() for name in account_names]
 
@@ -164,7 +169,7 @@ def update_member_status(user_input, amount_paid, trans_ref, slip_date, sender_n
                     tz = pytz.timezone('Asia/Bangkok')
                     timestamp = datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
                 
-                # บันทึกข้อมูล (ใช้ user_input เดิมที่ลูกค้ากรอกมาแสดงใน log)
+                # บันทึกข้อมูล
                 history_sheet.append_row([timestamp, user_input, amount_paid, trans_ref, sender_name, new_permissions])
 
             readable_date = get_readable_expiry(new_permissions)
