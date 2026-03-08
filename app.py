@@ -184,18 +184,16 @@ st.info(f"🏦 โอนเงินเข้า: **ออมสิน {TARGET_B
 st.warning("⚠️ **หมายเหตุสำหรับ ธ.กรุงเทพ:** ระบบของธนาคารกรุงเทพจะอัปเดตข้อมูลล่าช้า หากเพิ่งโอนเสร็จ **กรุณารอประมาณ 3 นาที** แล้วค่อยอัปโหลดสลิปตรวจสอบนะครับ")
 
 # ==========================================
-# 🔥 อัปเดตระบบดึง Member ID จาก URL อัตโนมัติ (ชัวร์ 100%)
+# 🔥 ดึง Member ID จาก URL อัตโนมัติ (ชัวร์ 100%)
 # ==========================================
 default_id = ""
 try:
     if hasattr(st, "query_params"):
-        # สำหรับ Streamlit เวอร์ชั่นใหม่ (1.30.0 ขึ้นไป)
         if "id" in st.query_params:
             default_id = st.query_params["id"]
         elif "user" in st.query_params:
             default_id = st.query_params["user"]
     else:
-        # สำหรับ Streamlit เวอร์ชั่นเก่า
         params = st.experimental_get_query_params()
         if "id" in params:
             default_id = params["id"][0]
@@ -206,7 +204,6 @@ except Exception as e:
 # ==========================================
 
 with st.form("topup_form"):
-    # 🔥 เปลี่ยนข้อความเป็น ระบบกรอกให้อัตโนมัติ และยัด default_id ใส่ไป
     user_input = st.text_input("👤 Member ID (ระบบกรอกให้อัตโนมัติ)", value=default_id)
     uploaded_file = st.file_uploader("💸 อัปโหลดสลิปโอนเงิน", type=['jpg', 'png', 'jpeg'])
     submit_button = st.form_submit_button("ตรวจสอบและเติมเงิน")
@@ -286,15 +283,25 @@ if submit_button:
 
                 st.info(display_msg)
 
+                # ====================================================
+                # 🔥 เพิ่มคำค้นหาเผื่อธนาคารกรุงเทพใช้ชื่ออื่น (bankRef, billerRef)
+                # ====================================================
                 trans_ref = slip_result.get('transRef') or \
                             raw.get('transId') or \
                             raw.get('ref1') or \
-                            raw.get('id') or ''
+                            raw.get('id') or \
+                            raw.get('bankRef') or \
+                            raw.get('billerRef') or \
+                            raw.get('transactionId') or ''
 
                 if not trans_ref:
-                    # กรณีตรวจผ่านแต่ไม่มีรหัสอ้างอิง
+                    # 🔴 ถ้ายังหาไม่เจออีก จะแสดงปุ่ม Debug ให้คุณก๊อปมาให้ผมดูครับ
                     st.error("❌ ไม่พบรหัสอ้างอิงสลิป (Transaction ID)")
-                    st.info("💡 **หากคุณโอนจาก ธ.กรุงเทพ:** ระบบส่วนกลางของธนาคารจะล่าช้า **กรุณารอประมาณ 3 นาที** แล้วกดปุ่มตรวจสอบใหม่อีกครั้งครับ")
+                    st.info("💡 หากเป็นสลิปจาก ธ.กรุงเทพ ระบบอาจซ่อนรหัสไว้ กรุณากดปุ่มด้านล่างเพื่อดูข้อมูลดิบ แล้วส่งให้ผู้ดูแลระบบครับ")
+                    
+                    with st.expander("🔍 กดเพื่อดูข้อมูลดิบ (สำหรับส่งให้ทีมงานช่วยเช็ก)"):
+                        st.json(slip_result)
+                        
                 else:
                     too_old, days_passed = is_slip_too_old(str(final_slip_datetime))
                     
@@ -311,6 +318,4 @@ if submit_button:
                             else:
                                 st.error(msg)
             else:
-                # กรณี API คืนค่ามาว่า Error หรือหาไม่เจอ
                 st.error(f"❌ {slip_result.get('message', 'ตรวจสอบสลิปไม่ผ่าน')}")
-                st.info("💡 **หากคุณโอนจาก ธ.กรุงเทพ:** ระบบส่วนกลางของธนาคารจะล่าช้า **กรุณารอประมาณ 3 นาที** แล้วกดปุ่มตรวจสอบใหม่อีกครั้งครับ")
