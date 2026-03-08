@@ -179,15 +179,17 @@ def update_member_status(user_input, amount_paid, trans_ref, slip_date, sender_n
 # --- UI หลัก ---
 st.markdown(f"### 🏦 โอนเงินเข้า: ออมสิน {TARGET_BANK_NAME} (100บ./เดือน)")
 
-# ดึง Member ID อัตโนมัติ
+# 🔥 ดึง Member ID อัตโนมัติ (เปลี่ยนมารับค่า member_id ตามที่นักสืบเจอ!)
 default_id = ""
 try:
     if hasattr(st, "query_params"):
-        if "id" in st.query_params: default_id = st.query_params["id"]
+        if "member_id" in st.query_params: default_id = st.query_params["member_id"]
+        elif "id" in st.query_params: default_id = st.query_params["id"]
         elif "user" in st.query_params: default_id = st.query_params["user"]
     else:
         params = st.experimental_get_query_params()
-        if "id" in params: default_id = params["id"][0]
+        if "member_id" in params: default_id = params["member_id"][0]
+        elif "id" in params: default_id = params["id"][0]
         elif "user" in params: default_id = params["user"][0]
 except:
     pass
@@ -247,20 +249,9 @@ if submit_button:
                     else:
                         success, msg = update_member_status(user_input, amount, trans_ref, final_slip_datetime, sender_name)
                         if success:
+                            # ข้อความสำเร็จ ใหญ่ ชัดเจน ไม่มีลูกโป่ง
                             st.success(f"### {msg}\nยอดเงินที่เติม: **{amount} บาท**")
                         else:
                             st.error(f"### ❌ เกิดข้อผิดพลาด\n{msg}")
             else:
                 st.error("### ❌ ระบบไม่สามารถอ่าน QR CODE จากสลิปนี้ได้\nรบกวนส่งรูปสลิปให้แอดมินทางแชทเฟซบุ๊กครับ")
-
-# ==========================================
-# 🔍 โหมดนักสืบ: เช็กข้อมูลที่ถูกส่งมาจากเว็บหลัก
-# ==========================================
-st.write("---")
-try:
-    if hasattr(st, "query_params"):
-        st.info(f"🔍 ข้อมูลที่เว็บหลักส่งมาให้คือ: {st.query_params.to_dict()}")
-    else:
-        st.info(f"🔍 ข้อมูลที่เว็บหลักส่งมาให้คือ: {st.experimental_get_query_params()}")
-except Exception as e:
-    st.info(f"🔍 เกิดข้อผิดพลาดในการดึงค่า: {e}")
