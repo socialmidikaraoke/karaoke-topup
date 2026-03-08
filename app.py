@@ -182,13 +182,11 @@ def update_member_status(user_input, amount_paid, trans_ref, slip_date, sender_n
 # --- UI ---
 st.info(f"🏦 โอนเงินเข้า: **ออมสิน {TARGET_BANK_NAME}** (100บ./เดือน)")
 
-# ✅ 1. ดึงค่าจาก URL parameter
-default_member_id = st.query_params.get("member_id", "")
+# 🔥 แจ้งเตือนเรื่องธนาคารกรุงเทพตั้งแต่แรก
+st.warning("⚠️ **หมายเหตุสำหรับ ธ.กรุงเทพ:** ระบบของธนาคารกรุงเทพจะอัปเดตข้อมูลล่าช้า หากเพิ่งโอนเสร็จ **กรุณารอประมาณ 3 นาที** แล้วค่อยอัปโหลดสลิปตรวจสอบนะครับ")
 
 with st.form("topup_form"):
-    # ✅ 2. นำค่าที่ดึงได้มาใส่เป็นค่าเริ่มต้น (value)
-    user_input = st.text_input("👤 Member ID (เช็กความถูกต้อง *ระบบใส่ให้อัตโนมัติ)", value=default_member_id)
-    
+    user_input = st.text_input("👤 Member ID (กรอกให้ถูกต้อง เช่น MIDI-Test1)")
     uploaded_file = st.file_uploader("💸 อัปโหลดสลิปโอนเงิน", type=['jpg', 'png', 'jpeg'])
     submit_button = st.form_submit_button("ตรวจสอบและเติมเงิน")
 
@@ -273,7 +271,9 @@ if submit_button:
                             raw.get('id') or ''
 
                 if not trans_ref:
+                    # 🔥 กรณีตรวจผ่านแต่ไม่มีรหัสอ้างอิง
                     st.error("❌ ไม่พบรหัสอ้างอิงสลิป (Transaction ID)")
+                    st.info("💡 **หากคุณโอนจาก ธ.กรุงเทพ:** ระบบส่วนกลางของธนาคารจะล่าช้า **กรุณารอประมาณ 3 นาที** แล้วกดปุ่มตรวจสอบใหม่อีกครั้งครับ")
                 else:
                     too_old, days_passed = is_slip_too_old(str(final_slip_datetime))
                     
@@ -290,5 +290,6 @@ if submit_button:
                             else:
                                 st.error(msg)
             else:
-                st.error(f"❌ {slip_result['message']}")
-
+                # 🔥 กรณี API คืนค่ามาว่า Error หรือหาไม่เจอ
+                st.error(f"❌ {slip_result.get('message', 'ตรวจสอบสลิปไม่ผ่าน')}")
+                st.info("💡 **หากคุณโอนจาก ธ.กรุงเทพ:** ระบบส่วนกลางของธนาคารจะล่าช้า **กรุณารอประมาณ 3 นาที** แล้วกดปุ่มตรวจสอบใหม่อีกครั้งครับ")
