@@ -6,9 +6,10 @@ import os
 from datetime import datetime
 import pytz
 import re
+import time  # 🔥 นำเข้าไลบรารี time สำหรับการหน่วงเวลารีเฟรช
 
 # =========================================================
-# 🎨 ตั้งค่าหน้าเว็บ และลบ CSS ที่ทำให้พังออก (เหลือแค่ปรับขนาดให้ใหญ่)
+# 🎨 ตั้งค่าหน้าเว็บ และ CSS
 # =========================================================
 st.set_page_config(page_title="ระบบเติมเงิน", page_icon="🎤", layout="centered")
 
@@ -26,14 +27,14 @@ custom_css = """
                 padding: 15px !important;
             }
             
-            /* ขยายปุ่มให้ใหญ่และกดง่าย โดยไม่ไปยุ่งกับสี */
+            /* ขยายปุ่มให้ใหญ่และกดง่าย */
             .stButton>button {
                 width: 100% !important; 
                 height: 65px !important; 
                 font-size: 22px !important; 
                 font-weight: bold !important; 
                 border-radius: 10px !important;
-                border: 2px solid #00d26a !important; /* เพิ่มขอบสีเขียวให้ปุ่มดูเด่นขึ้นนิดนึง */
+                border: 2px solid #00d26a !important;
             }
             </style>
             """
@@ -189,7 +190,9 @@ def update_member_status(user_input, amount_paid, trans_ref, slip_date, sender_n
         return False, f"System Error: {e}"
 
 # --- UI หลัก (หน้าตาที่แสดงผล) ---
-st.markdown(f"<div style='font-size: 24px; font-weight: bold; margin-bottom: 20px;'>🏦 โอนเงินเข้า: ออมสิน {TARGET_BANK_NAME} (100บ./เดือน)</div>", unsafe_allow_html=True)
+
+# 🔥 แก้ไขตรงนี้: เพิ่ม margin-top: 40px; เพื่อดันให้ข้อความลงมา ไม่ชิดขอบบนเกินไป
+st.markdown(f"<div style='margin-top: 40px; font-size: 24px; font-weight: bold; margin-bottom: 20px;'>🏦 โอนเงินเข้า: ออมสิน {TARGET_BANK_NAME} (100บ./เดือน)</div>", unsafe_allow_html=True)
 
 # ดึง Member ID อัตโนมัติ
 default_id = ""
@@ -264,7 +267,15 @@ if submit_button:
                     else:
                         success, msg = update_member_status(user_input, amount, trans_ref, final_slip_datetime, sender_name)
                         if success:
+                            # 🔥 แสดงผลสำเร็จ และทำการหน่วงเวลาเพื่อรีเฟรชระบบ
                             st.success(f"✅ **{msg}**\n\nยอดเงินที่เติม: **{amount} บาท**")
+                            st.info("🔄 **กำลังรีเซ็ตฟอร์ม...** (กรุณากดปุ่ม **'อัปเดตสิทธิ์'** ด้านบนเพื่อดูสิทธิ์ล่าสุดครับ)")
+                            
+                            time.sleep(4) # หน่วงเวลา 4 วินาทีให้ลูกค้าอ่าน
+                            try:
+                                st.rerun() # รีเซ็ตฟอร์มให้สะอาด
+                            except:
+                                st.experimental_rerun()
                         else:
                             st.error(f"❌ **เกิดข้อผิดพลาด**\n\n{msg}")
             else:
