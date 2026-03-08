@@ -8,86 +8,32 @@ import pytz
 import re
 
 # =========================================================
-# 🎨 ตั้งค่าหน้าเว็บ และ CSS พลิกโฉม UI เป็น Dark Mode ให้เข้ากับเว็บหลัก
+# 🎨 ตั้งค่าหน้าเว็บ และลบ CSS ที่ทำให้พังออก (เหลือแค่ปรับขนาดให้ใหญ่)
 # =========================================================
 st.set_page_config(page_title="ระบบเติมเงิน", page_icon="🎤", layout="centered")
 
 custom_css = """
             <style>
-            /* ซ่อนเมนูด้านบนและ Footer */
             #MainMenu {visibility: hidden;}
             footer {visibility: hidden;}
             header {visibility: hidden;}
             [data-testid="InputInstructions"] {display: none;}
             
-            /* เปลี่ยนพื้นหลังแอปให้เป็นโทนสีมืด (เข้ากับเว็บหลัก) */
-            [data-testid="stAppViewContainer"] {
-                background-color: #171c24 !important;
-            }
-            
-            /* เปลี่ยนสีตัวหนังสือทั่วไปเป็นสีขาว/เทาอ่อน */
-            p, div, span, label {
-                color: #e2e8f0 !important;
-            }
-            
-            /* ปรับแต่งช่องกรอกรหัสสมาชิก */
+            /* ขยายขนาดตัวอักษรของช่องกรอกให้ดูง่ายขึ้น */
             .stTextInput>div>div>input {
-                background-color: #232b36 !important;
-                color: #ffffff !important;
-                border: 2px solid #334155 !important;
-                border-radius: 10px !important;
-                font-size: 20px !important;
-                font-weight: bold;
+                font-size: 20px !important; 
+                font-weight: bold !important;
                 padding: 15px !important;
             }
-            .stTextInput>div>div>input:focus {
-                border-color: #00d26a !important;
-                box-shadow: 0 0 5px #00d26a !important;
-            }
-
-            /* ปรับแต่งช่องอัปโหลดสลิป */
-            [data-testid="stFileUploadDropzone"] {
-                background-color: #232b36 !important;
-                border: 2px dashed #475569 !important;
-                border-radius: 10px !important;
-                padding: 20px !important;
-            }
-            [data-testid="stFileUploadDropzone"]:hover {
-                border-color: #00d26a !important;
-                background-color: #2a3441 !important;
-            }
-            [data-testid="stFileUploadDropzone"] button {
-                background-color: #334155 !important;
-                color: white !important;
-                border-radius: 8px !important;
-            }
-
-            /* ปรับแต่งปุ่มกด ยืนยัน (ปุ่มใหญ่ สีเขียวเด่นๆ) */
-            .stButton>button {
-                width: 100% !important;
-                height: 70px !important;
-                font-size: 24px !important;
-                font-weight: bold !important;
-                background-color: #12b886 !important;
-                color: white !important;
-                border: none !important;
-                border-radius: 12px !important;
-                box-shadow: 0 4px 6px rgba(0,0,0,0.3) !important;
-                transition: all 0.3s ease !important;
-                margin-top: 10px !important;
-            }
-            .stButton>button:hover {
-                background-color: #0ca678 !important;
-                transform: translateY(-2px) !important;
-                box-shadow: 0 6px 12px rgba(18, 184, 134, 0.4) !important;
-            }
             
-            /* ปรับแต่งกล่องข้อความแจ้งเตือนต่างๆ ให้เข้ากับ Dark Mode */
-            [data-testid="stAlert"] {
-                background-color: #232b36 !important;
-                border: 1px solid #475569 !important;
+            /* ขยายปุ่มให้ใหญ่และกดง่าย โดยไม่ไปยุ่งกับสี */
+            .stButton>button {
+                width: 100% !important; 
+                height: 65px !important; 
+                font-size: 22px !important; 
+                font-weight: bold !important; 
                 border-radius: 10px !important;
-                color: white !important;
+                border: 2px solid #00d26a !important; /* เพิ่มขอบสีเขียวให้ปุ่มดูเด่นขึ้นนิดนึง */
             }
             </style>
             """
@@ -95,7 +41,7 @@ st.markdown(custom_css, unsafe_allow_html=True)
 # =========================================================
 
 # =========================================================
-# 🔒 ตั้งค่าความปลอดภัย (ระบบหลังบ้าน ไม่มีการเปลี่ยนแปลง)
+# 🔒 ตั้งค่าความปลอดภัย
 # =========================================================
 TARGET_BANK_NAME = "020300995519"
 PRICE_PER_MONTH = 100
@@ -243,17 +189,9 @@ def update_member_status(user_input, amount_paid, trans_ref, slip_date, sender_n
         return False, f"System Error: {e}"
 
 # --- UI หลัก (หน้าตาที่แสดงผล) ---
+st.markdown(f"<div style='font-size: 24px; font-weight: bold; margin-bottom: 20px;'>🏦 โอนเงินเข้า: ออมสิน {TARGET_BANK_NAME} (100บ./เดือน)</div>", unsafe_allow_html=True)
 
-# ใช้ div ตกแต่งให้สวยงาม กลมกลืนกับ Dark Mode
-st.markdown(f"""
-    <div style='background-color: #232b36; padding: 15px; border-radius: 10px; border-left: 5px solid #00d26a; margin-bottom: 25px;'>
-        <div style='font-size: 22px; font-weight: bold; color: #ffffff;'>
-            🏦 โอนเงินเข้า: ออมสิน {TARGET_BANK_NAME} <span style='color: #00d26a;'>(100บ./เดือน)</span>
-        </div>
-    </div>
-""", unsafe_allow_html=True)
-
-# ดึง Member ID อัตโนมัติ 
+# ดึง Member ID อัตโนมัติ
 default_id = ""
 try:
     if hasattr(st, "query_params"):
@@ -269,7 +207,6 @@ except:
     pass
 
 with st.form("topup_form", clear_on_submit=False):
-    # เปลี่ยน Label ให้ใหญ่ขึ้นนิดหน่อย
     st.markdown("<div style='font-size: 18px; font-weight: bold; margin-bottom: 5px;'>👤 รหัสสมาชิก (Member ID)</div>", unsafe_allow_html=True)
     user_input = st.text_input("รหัสสมาชิก", value=default_id, label_visibility="collapsed")
     
