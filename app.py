@@ -138,7 +138,7 @@ def update_member_status(user_input, amount_paid, trans_ref, slip_date, sender_n
         target_row = None
         current_permissions = ""
         user_input = str(user_input).strip()
-        user_input_lower = user_input.lower() # แปลงสิ่งที่ลูกค้ากรอกเป็นตัวเล็ก
+        user_input_lower = user_input.lower() 
         
         for i, row in enumerate(all_data):
             if len(row) <= 1: continue 
@@ -147,7 +147,6 @@ def update_member_status(user_input, amount_paid, trans_ref, slip_date, sender_n
             if len(row) > 6:
                 account_names = [str(name).strip() for name in str(row[6]).split(',')]
             
-            # เปรียบเทียบโดยแปลงเป็นตัวเล็กทั้งหมด
             member_id_lower = member_id.lower()
             account_names_lower = [name.lower() for name in account_names]
 
@@ -169,7 +168,6 @@ def update_member_status(user_input, amount_paid, trans_ref, slip_date, sender_n
                     tz = pytz.timezone('Asia/Bangkok')
                     timestamp = datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
                 
-                # บันทึกข้อมูล
                 history_sheet.append_row([timestamp, user_input, amount_paid, trans_ref, sender_name, new_permissions])
 
             readable_date = get_readable_expiry(new_permissions)
@@ -182,28 +180,34 @@ def update_member_status(user_input, amount_paid, trans_ref, slip_date, sender_n
 # --- UI ---
 st.info(f"🏦 โอนเงินเข้า: **ออมสิน {TARGET_BANK_NAME}** (100บ./เดือน)")
 
-# 🔥 แจ้งเตือนเรื่องธนาคารกรุงเทพตั้งแต่แรก
+# แจ้งเตือนเรื่องธนาคารกรุงเทพตั้งแต่แรก
 st.warning("⚠️ **หมายเหตุสำหรับ ธ.กรุงเทพ:** ระบบของธนาคารกรุงเทพจะอัปเดตข้อมูลล่าช้า หากเพิ่งโอนเสร็จ **กรุณารอประมาณ 3 นาที** แล้วค่อยอัปโหลดสลิปตรวจสอบนะครับ")
 
 # ==========================================
-# 🔥 เพิ่มระบบดึง Member ID จาก URL อัตโนมัติ
-# (เช่น ?id=MIDI-Test1 หรือ ?user=MIDI-Test1)
+# 🔥 อัปเดตระบบดึง Member ID จาก URL อัตโนมัติ (ชัวร์ 100%)
 # ==========================================
+default_id = ""
 try:
-    # สำหรับ Streamlit เวอร์ชั่นใหม่
-    default_id = st.query_params.get("id", st.query_params.get("user", ""))
-except:
-    # สำรองไว้เผื่อใช้ Streamlit เวอร์ชั่นเก่า
-    try:
+    if hasattr(st, "query_params"):
+        # สำหรับ Streamlit เวอร์ชั่นใหม่ (1.30.0 ขึ้นไป)
+        if "id" in st.query_params:
+            default_id = st.query_params["id"]
+        elif "user" in st.query_params:
+            default_id = st.query_params["user"]
+    else:
+        # สำหรับ Streamlit เวอร์ชั่นเก่า
         params = st.experimental_get_query_params()
-        default_id = params.get("id", params.get("user", [""]))[0]
-    except:
-        default_id = ""
+        if "id" in params:
+            default_id = params["id"][0]
+        elif "user" in params:
+            default_id = params["user"][0]
+except Exception as e:
+    default_id = ""
 # ==========================================
 
 with st.form("topup_form"):
-    # 🔥 ใส่ค่า default_id ที่ดึงมาได้เข้าช่องอัตโนมัติ
-    user_input = st.text_input("👤 Member ID (กรอกให้ถูกต้อง เช่น MIDI-Test1)", value=default_id)
+    # 🔥 เปลี่ยนข้อความเป็น ระบบกรอกให้อัตโนมัติ และยัด default_id ใส่ไป
+    user_input = st.text_input("👤 Member ID (ระบบกรอกให้อัตโนมัติ)", value=default_id)
     uploaded_file = st.file_uploader("💸 อัปโหลดสลิปโอนเงิน", type=['jpg', 'png', 'jpeg'])
     submit_button = st.form_submit_button("ตรวจสอบและเติมเงิน")
 
@@ -288,7 +292,7 @@ if submit_button:
                             raw.get('id') or ''
 
                 if not trans_ref:
-                    # 🔥 กรณีตรวจผ่านแต่ไม่มีรหัสอ้างอิง
+                    # กรณีตรวจผ่านแต่ไม่มีรหัสอ้างอิง
                     st.error("❌ ไม่พบรหัสอ้างอิงสลิป (Transaction ID)")
                     st.info("💡 **หากคุณโอนจาก ธ.กรุงเทพ:** ระบบส่วนกลางของธนาคารจะล่าช้า **กรุณารอประมาณ 3 นาที** แล้วกดปุ่มตรวจสอบใหม่อีกครั้งครับ")
                 else:
@@ -307,6 +311,6 @@ if submit_button:
                             else:
                                 st.error(msg)
             else:
-                # 🔥 กรณี API คืนค่ามาว่า Error หรือหาไม่เจอ
+                # กรณี API คืนค่ามาว่า Error หรือหาไม่เจอ
                 st.error(f"❌ {slip_result.get('message', 'ตรวจสอบสลิปไม่ผ่าน')}")
                 st.info("💡 **หากคุณโอนจาก ธ.กรุงเทพ:** ระบบส่วนกลางของธนาคารจะล่าช้า **กรุณารอประมาณ 3 นาที** แล้วกดปุ่มตรวจสอบใหม่อีกครั้งครับ")
