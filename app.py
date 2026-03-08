@@ -7,25 +7,25 @@ from datetime import datetime
 import pytz
 import re
 
-# ตั้งค่าหน้าเว็บ
-st.set_page_config(page_title="ระบบเติมเงินสมาชิก", page_icon="🎤")
+# =========================================================
+# 🎨 ตั้งค่าหน้าเว็บ และ CSS ปรับ UI ให้เรียบง่าย สบายตา (สำหรับผู้สูงวัย)
+# =========================================================
+st.set_page_config(page_title="ระบบเติมเงิน", page_icon="🎤", layout="centered")
 
-# =========================================================
-# 🎨 ส่วนที่ซ่อน Footer, Menu, Header และ Input Instructions
-# =========================================================
-hide_streamlit_style = """
+custom_css = """
             <style>
             #MainMenu {visibility: hidden;}
             footer {visibility: hidden;}
             header {visibility: hidden;}
+            [data-testid="InputInstructions"] {display: none;}
             
-            /* 🔥 ซ่อนคำว่า Press Enter to submit form */
-            [data-testid="InputInstructions"] {
-                display: none;
-            }
+            /* ขยายขนาดตัวอักษรของปุ่มและช่องกรอกให้ดูง่ายขึ้น */
+            .stTextInput>div>div>input {font-size: 18px !important; font-weight: bold;}
+            .stButton>button {width: 100%; height: 60px; font-size: 20px !important; font-weight: bold; background-color: #4CAF50; color: white;}
+            .stButton>button:hover {background-color: #45a049; color: white;}
             </style>
             """
-st.markdown(hide_streamlit_style, unsafe_allow_html=True)
+st.markdown(custom_css, unsafe_allow_html=True)
 # =========================================================
 
 # =========================================================
@@ -120,7 +120,6 @@ def is_slip_too_old(slip_date_str):
     except:
         return False, 0
 
-# 🔥 รองรับตัวพิมพ์เล็ก/ใหญ่ (Case Insensitive)
 def update_member_status(user_input, amount_paid, trans_ref, slip_date, sender_name):
     try:
         sh = get_google_spreadsheet()
@@ -131,7 +130,7 @@ def update_member_status(user_input, amount_paid, trans_ref, slip_date, sender_n
         if trans_ref:
             try:
                 found = history_sheet.find(trans_ref)
-                if found: return False, f"⛔ สลิปนี้ถูกใช้งานไปแล้วครับ!" 
+                if found: return False, "⛔ สลิปนี้ถูกใช้งานไปแล้วครับ!" 
             except: pass 
 
         all_data = member_sheet.get_all_values()
@@ -171,151 +170,86 @@ def update_member_status(user_input, amount_paid, trans_ref, slip_date, sender_n
                 history_sheet.append_row([timestamp, user_input, amount_paid, trans_ref, sender_name, new_permissions])
 
             readable_date = get_readable_expiry(new_permissions)
-            return True, f"✅ อัปเดตสำเร็จ! โหลดได้ถึง: **{readable_date}**"
+            return True, f"✅ เติมเงินสำเร็จ! ใช้งานได้ถึง: {readable_date}"
         else:
-            return False, f"ไม่พบสมาชิก '{user_input}' ในระบบ"
+            return False, f"ไม่พบรหัสสมาชิก '{user_input}' ในระบบ"
     except Exception as e:
         return False, f"System Error: {e}"
 
-# --- UI ---
-st.info(f"🏦 โอนเงินเข้า: **ออมสิน {TARGET_BANK_NAME}** (100บ./เดือน)")
+# --- UI หลัก ---
+st.markdown(f"### 🏦 โอนเงินเข้า: ออมสิน {TARGET_BANK_NAME} (100บ./เดือน)")
 
-# แจ้งเตือนเรื่องธนาคารกรุงเทพตั้งแต่แรก
-st.warning("⚠️ **หมายเหตุสำหรับ ธ.กรุงเทพ:** ระบบของธนาคารกรุงเทพจะอัปเดตข้อมูลล่าช้า หากเพิ่งโอนเสร็จ **กรุณารอประมาณ 3 นาที** แล้วค่อยอัปโหลดสลิปตรวจสอบนะครับ")
-
-# ==========================================
-# 🔥 ดึง Member ID จาก URL อัตโนมัติ (ชัวร์ 100%)
-# ==========================================
+# ดึง Member ID อัตโนมัติ
 default_id = ""
 try:
     if hasattr(st, "query_params"):
-        if "id" in st.query_params:
-            default_id = st.query_params["id"]
-        elif "user" in st.query_params:
-            default_id = st.query_params["user"]
+        if "id" in st.query_params: default_id = st.query_params["id"]
+        elif "user" in st.query_params: default_id = st.query_params["user"]
     else:
         params = st.experimental_get_query_params()
-        if "id" in params:
-            default_id = params["id"][0]
-        elif "user" in params:
-            default_id = params["user"][0]
-except Exception as e:
-    default_id = ""
-# ==========================================
+        if "id" in params: default_id = params["id"][0]
+        elif "user" in params: default_id = params["user"][0]
+except:
+    pass
 
-with st.form("topup_form"):
-    user_input = st.text_input("👤 Member ID (ระบบกรอกให้อัตโนมัติ)", value=default_id)
-    uploaded_file = st.file_uploader("💸 อัปโหลดสลิปโอนเงิน", type=['jpg', 'png', 'jpeg'])
-    submit_button = st.form_submit_button("ตรวจสอบและเติมเงิน")
+with st.form("topup_form", clear_on_submit=False):
+    user_input = st.text_input("👤 รหัสสมาชิก (Member ID)", value=default_id)
+    uploaded_file = st.file_uploader("💸 อัปโหลดรูปสลิปโอนเงินตรงนี้", type=['jpg', 'png', 'jpeg'])
+    submit_button = st.form_submit_button("ตรวจสอบสลิปและเติมเงิน")
 
 if submit_button:
     if not user_input or not uploaded_file:
-        st.warning("⚠️ กรุณากรอกข้อมูลให้ครบ")
+        st.warning("⚠️ กรุณากรอกรหัสสมาชิกและอัปโหลดรูปสลิปก่อนครับ")
     else:
-        with st.spinner("⏳ กำลังตรวจสอบกับธนาคาร..."):
+        with st.spinner("⏳ กำลังตรวจสอบข้อมูล... กรุณารอสักครู่"):
             with open("temp_slip.jpg", "wb") as f:
                 f.write(uploaded_file.getbuffer())
             
             slip_result = check_slip_slip2go("temp_slip.jpg")
             if os.path.exists("temp_slip.jpg"): os.remove("temp_slip.jpg")
             
-            if slip_result['success']:
-                amount = slip_result.get('amount', 0)
+            if slip_result.get('success'):
+                amount = slip_result.get('amount')
                 raw = slip_result.get('raw_data', {})
                 
-                # ดึงวันเวลา
-                d = slip_result.get('transDate') or \
-                    slip_result.get('date') or \
-                    raw.get('dateTime') or \
-                    raw.get('transDate') or \
-                    raw.get('date') or \
-                    raw.get('sendingBankDate')
-                
-                t = slip_result.get('transTime') or \
-                    slip_result.get('time') or \
-                    raw.get('transTime') or \
-                    raw.get('time')
+                # ตรวจจับสลิปที่อ่าน QR Code ไม่ได้ หรือข้อมูลว่างเปล่า
+                if amount is None or amount == "" or float(amount) == 0:
+                    st.error("### ❌ ระบบไม่สามารถอ่าน QR CODE จากสลิปนี้ได้\nรบกวนส่งรูปสลิปให้แอดมินทางแชทเฟซบุ๊กครับ")
+                    st.stop()
+
+                d = slip_result.get('transDate') or slip_result.get('date') or raw.get('dateTime') or raw.get('transDate') or raw.get('date') or raw.get('sendingBankDate')
+                t = slip_result.get('transTime') or slip_result.get('time') or raw.get('transTime') or raw.get('time')
 
                 final_slip_datetime = ""
-                if d and 'T' in str(d):
-                    final_slip_datetime = str(d)
-                elif d and t:
-                    final_slip_datetime = f"{d} {t}"
-                elif d:
-                    final_slip_datetime = str(d)
+                if d and 'T' in str(d): final_slip_datetime = str(d)
+                elif d and t: final_slip_datetime = f"{d} {t}"
+                elif d: final_slip_datetime = str(d)
                 
-                # ดึงชื่อผู้โอน
                 sender_name = "ไม่ระบุ"
                 try:
                     sender_acc_name = raw.get('sender', {}).get('account', {}).get('name')
-                    if sender_acc_name:
-                        sender_name = sender_acc_name
+                    if sender_acc_name: sender_name = sender_acc_name
                     else:
                         sender_name = slip_result.get('sender', 'ไม่ระบุ')
-                        if isinstance(sender_name, dict):
-                             sender_name = sender_name.get('account', {}).get('name', 'ไม่ระบุ')
+                        if isinstance(sender_name, dict): sender_name = sender_name.get('account', {}).get('name', 'ไม่ระบุ')
                 except:
                     pass
-                
-                # แสดงผลวันที่แบบไทย + พ.ศ.
-                display_msg = f"วันที่: {final_slip_datetime} | ผู้โอน: {sender_name}"
-                try:
-                    clean_dt_str = str(final_slip_datetime).replace('Z', '+00:00')
-                    if 'T' in clean_dt_str:
-                         dt_obj = datetime.fromisoformat(clean_dt_str)
-                    else:
-                         dt_obj = datetime.strptime(clean_dt_str[:19], "%Y-%m-%d %H:%M:%S")
 
-                    bangkok_tz = pytz.timezone('Asia/Bangkok')
-                    if dt_obj.tzinfo is None:
-                        dt_obj = bangkok_tz.localize(dt_obj)
-                    else:
-                        dt_obj = dt_obj.astimezone(bangkok_tz)
-
-                    year_be = dt_obj.year + 543
-                    day = str(dt_obj.day).zfill(2)
-                    month = str(dt_obj.month).zfill(2)
-                    time_str = dt_obj.strftime("%H:%M:%S")
-                    
-                    display_msg = f"วันที่โอน : {day}-{month}-{year_be} | เวลา {time_str} | 👤 ผู้โอน : {sender_name}"
-                except Exception as e:
-                    display_msg = f"วันที่โอน : {final_slip_datetime} (Raw) | 👤 ผู้โอน : {sender_name}"
-
-                st.info(display_msg)
-
-                # ====================================================
-                # 🔥 เพิ่มคำค้นหาเผื่อธนาคารกรุงเทพใช้ชื่ออื่น (bankRef, billerRef)
-                # ====================================================
-                trans_ref = slip_result.get('transRef') or \
-                            raw.get('transId') or \
-                            raw.get('ref1') or \
-                            raw.get('id') or \
-                            raw.get('bankRef') or \
-                            raw.get('billerRef') or \
-                            raw.get('transactionId') or ''
+                trans_ref = slip_result.get('transRef') or raw.get('transId') or raw.get('ref1') or raw.get('id') or raw.get('bankRef') or raw.get('billerRef') or raw.get('transactionId') or ''
 
                 if not trans_ref:
-                    # 🔴 ถ้ายังหาไม่เจออีก จะแสดงปุ่ม Debug ให้คุณก๊อปมาให้ผมดูครับ
-                    st.error("❌ ไม่พบรหัสอ้างอิงสลิป (Transaction ID)")
-                    st.info("💡 หากเป็นสลิปจาก ธ.กรุงเทพ ระบบอาจซ่อนรหัสไว้ กรุณากดปุ่มด้านล่างเพื่อดูข้อมูลดิบ แล้วส่งให้ผู้ดูแลระบบครับ")
-                    
-                    with st.expander("🔍 กดเพื่อดูข้อมูลดิบ (สำหรับส่งให้ทีมงานช่วยเช็ก)"):
-                        st.json(slip_result)
-                        
+                    st.error("### ❌ ระบบไม่สามารถอ่าน QR CODE จากสลิปนี้ได้\nรบกวนส่งรูปสลิปให้แอดมินทางแชทเฟซบุ๊กครับ")
                 else:
                     too_old, days_passed = is_slip_too_old(str(final_slip_datetime))
                     
                     if too_old:
-                        st.error(f"⛔ สลิปนี้เก่าเกินไปครับ! ({days_passed} วัน)") 
+                        st.error(f"### ⛔ สลิปนี้เก่าเกินไปครับ ({days_passed} วัน)") 
                     else:
-                        st.success(f"✅ สลิปถูกต้อง! ({amount} บาท)")
-                        
-                        with st.spinner("⏳ กำลังอัปเดตสิทธิ์..."):
-                            success, msg = update_member_status(user_input, amount, trans_ref, final_slip_datetime, sender_name)
-                            if success:
-                                st.success(msg)
-                                st.balloons()
-                            else:
-                                st.error(msg)
+                        success, msg = update_member_status(user_input, amount, trans_ref, final_slip_datetime, sender_name)
+                        if success:
+                            # ข้อความสำเร็จ ใหญ่ ชัดเจน ไม่มีลูกโป่ง
+                            st.success(f"### {msg}\nยอดเงินที่เติม: **{amount} บาท**")
+                        else:
+                            st.error(f"### ❌ เกิดข้อผิดพลาด\n{msg}")
             else:
-                st.error(f"❌ {slip_result.get('message', 'ตรวจสอบสลิปไม่ผ่าน')}")
+                st.error("### ❌ ระบบไม่สามารถอ่าน QR CODE จากสลิปนี้ได้\nรบกวนส่งรูปสลิปให้แอดมินทางแชทเฟซบุ๊กครับ")
