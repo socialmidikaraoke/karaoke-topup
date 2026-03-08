@@ -247,9 +247,20 @@ if submit_button:
                     else:
                         success, msg = update_member_status(user_input, amount, trans_ref, final_slip_datetime, sender_name)
                         if success:
-                            # ข้อความสำเร็จ ใหญ่ ชัดเจน ไม่มีลูกโป่ง
                             st.success(f"### {msg}\nยอดเงินที่เติม: **{amount} บาท**")
                         else:
                             st.error(f"### ❌ เกิดข้อผิดพลาด\n{msg}")
             else:
                 st.error("### ❌ ระบบไม่สามารถอ่าน QR CODE จากสลิปนี้ได้\nรบกวนส่งรูปสลิปให้แอดมินทางแชทเฟซบุ๊กครับ")
+
+# ==========================================
+# 🔍 โหมดนักสืบ: เช็กข้อมูลที่ถูกส่งมาจากเว็บหลัก
+# ==========================================
+st.write("---")
+try:
+    if hasattr(st, "query_params"):
+        st.info(f"🔍 ข้อมูลที่เว็บหลักส่งมาให้คือ: {st.query_params.to_dict()}")
+    else:
+        st.info(f"🔍 ข้อมูลที่เว็บหลักส่งมาให้คือ: {st.experimental_get_query_params()}")
+except Exception as e:
+    st.info(f"🔍 เกิดข้อผิดพลาดในการดึงค่า: {e}")
