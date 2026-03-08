@@ -185,8 +185,25 @@ st.info(f"🏦 โอนเงินเข้า: **ออมสิน {TARGET_B
 # 🔥 แจ้งเตือนเรื่องธนาคารกรุงเทพตั้งแต่แรก
 st.warning("⚠️ **หมายเหตุสำหรับ ธ.กรุงเทพ:** ระบบของธนาคารกรุงเทพจะอัปเดตข้อมูลล่าช้า หากเพิ่งโอนเสร็จ **กรุณารอประมาณ 3 นาที** แล้วค่อยอัปโหลดสลิปตรวจสอบนะครับ")
 
+# ==========================================
+# 🔥 เพิ่มระบบดึง Member ID จาก URL อัตโนมัติ
+# (เช่น ?id=MIDI-Test1 หรือ ?user=MIDI-Test1)
+# ==========================================
+try:
+    # สำหรับ Streamlit เวอร์ชั่นใหม่
+    default_id = st.query_params.get("id", st.query_params.get("user", ""))
+except:
+    # สำรองไว้เผื่อใช้ Streamlit เวอร์ชั่นเก่า
+    try:
+        params = st.experimental_get_query_params()
+        default_id = params.get("id", params.get("user", [""]))[0]
+    except:
+        default_id = ""
+# ==========================================
+
 with st.form("topup_form"):
-    user_input = st.text_input("👤 Member ID (กรอกให้ถูกต้อง เช่น MIDI-Test1)")
+    # 🔥 ใส่ค่า default_id ที่ดึงมาได้เข้าช่องอัตโนมัติ
+    user_input = st.text_input("👤 Member ID (กรอกให้ถูกต้อง เช่น MIDI-Test1)", value=default_id)
     uploaded_file = st.file_uploader("💸 อัปโหลดสลิปโอนเงิน", type=['jpg', 'png', 'jpeg'])
     submit_button = st.form_submit_button("ตรวจสอบและเติมเงิน")
 
