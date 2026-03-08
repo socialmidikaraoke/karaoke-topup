@@ -187,7 +187,7 @@ def update_member_status(user_input, amount_paid, trans_ref, slip_date, sender_n
     except Exception as e:
         return False, f"System Error: {e}"
 
-# --- UI หลัก (หน้าตาที่แสดงผล) ---
+# --- UI หลัก ---
 
 st.markdown(f"<div style='margin-top: 40px; font-size: 24px; font-weight: bold; margin-bottom: 20px;'>🏦 โอนเงินเข้า: ออมสิน {TARGET_BANK_NAME} (100บ./เดือน)</div>", unsafe_allow_html=True)
 
@@ -233,9 +233,7 @@ if submit_button:
                     st.error("❌ **ระบบไม่สามารถอ่าน QR CODE จากสลิปนี้ได้**\n\nรบกวนส่งรูปสลิปให้แอดมินทางแชทเฟซบุ๊กครับ")
                     st.stop()
                 
-                # =========================================================
-                # 🔥 ระบบตรวจสอบเลขบัญชีผู้รับ (ฉลาดขึ้น รองรับการซ่อนตัวเลขทุกรูปแบบ)
-                # =========================================================
+                # ระบบตรวจสอบเลขบัญชีผู้รับ
                 receiver_acc = ""
                 try:
                     receiver_acc = raw.get('receiver', {}).get('account', {}).get('bank', {}).get('account', '')
@@ -251,13 +249,10 @@ if submit_button:
                 clean_target = re.sub(r'[^0-9]', '', TARGET_BANK_NAME)
                 is_valid_account = True
                 
-                # ถ้า API ไม่ส่งเลขบัญชีมาเลย ระบบจะบล็อกเพื่อความปลอดภัย 100%
                 if not receiver_acc or str(receiver_acc).strip() == "":
                     is_valid_account = False
                 else:
-                    # ดึงกลุ่มตัวเลขทั้งหมดที่โผล่มา (เช่น "x-0203-xx-519" จะได้ ["0203", "519"])
                     blocks = re.findall(r'\d+', str(receiver_acc))
-                    
                     if not blocks:
                         is_valid_account = False
                     else:
@@ -265,26 +260,19 @@ if submit_button:
                         total_matched_digits = 0
                         
                         for block in blocks:
-                            # ตรวจสอบว่าก้อนตัวเลขนี้ มีอยู่ในบัญชีเป้าหมายหรือไม่ และต้องเรียงลำดับถูก
                             pos = clean_target.find(block, current_pos)
                             if pos == -1:
                                 is_valid_account = False
-                                break # ลำดับผิด หรือ ไม่ใช่เลขบัญชีนี้
+                                break 
                             current_pos = pos + len(block)
                             total_matched_digits += len(block)
                             
-                        # ขอให้มีตัวเลขตรงกันอย่างน้อย 3 ตัวขึ้นไป (ครอบคลุมที่บอกว่าเห็นแค่ 3 ตัวท้าย)
                         if total_matched_digits < 3:
                             is_valid_account = False
 
                 if not is_valid_account:
                     st.error(f"❌ **บัญชีผู้รับไม่ถูกต้อง!**\n\nสลิปนี้ไม่ได้โอนเข้าบัญชีออมสิน ({TARGET_BANK_NAME}) ครับ\nหากมั่นใจว่าโอนถูกต้อง รบกวนติดต่อแอดมินครับ")
-                    
-                    with st.expander("🔍 ข้อมูลบัญชีที่อ่านได้จากสลิป (เฉพาะแอดมิน)"):
-                        st.write(f"บัญชีเป้าหมาย: {TARGET_BANK_NAME}")
-                        st.write(f"บัญชีในสลิป: {receiver_acc if receiver_acc else 'ไม่พบข้อมูล'}")
                     st.stop()
-                # =========================================================
 
                 d = slip_result.get('transDate') or slip_result.get('date') or raw.get('dateTime') or raw.get('transDate') or raw.get('date') or raw.get('sendingBankDate')
                 t = slip_result.get('transTime') or slip_result.get('time') or raw.get('transTime') or raw.get('time')
@@ -320,9 +308,11 @@ if submit_button:
                             st.info("🔄 **กำลังรีเซ็ตฟอร์ม...** (กรุณากดปุ่ม **'อัปเดตสิทธิ์'** ด้านบนเพื่อดูสิทธิ์ล่าสุดครับ)")
                             
                             time.sleep(4) 
-                            try:
-                                st.rerun() 
-                            except:
+                            
+                            # 🔥 แก้ไขบั๊กการรีเฟรชหน้าเว็บตรงนี้ครับ!
+                            if hasattr(st, "rerun"):
+                                st.rerun()
+                            elif hasattr(st, "experimental_rerun"):
                                 st.experimental_rerun()
                         else:
                             st.error(f"❌ **เกิดข้อผิดพลาด**\n\n{msg}")
