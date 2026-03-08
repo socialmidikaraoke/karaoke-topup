@@ -6,7 +6,7 @@ import os
 from datetime import datetime
 import pytz
 import re
-import time  # 🔥 นำเข้าไลบรารี time สำหรับการหน่วงเวลารีเฟรช
+import time
 
 # =========================================================
 # 🎨 ตั้งค่าหน้าเว็บ และ CSS
@@ -20,14 +20,12 @@ custom_css = """
             header {visibility: hidden;}
             [data-testid="InputInstructions"] {display: none;}
             
-            /* ขยายขนาดตัวอักษรของช่องกรอกให้ดูง่ายขึ้น */
             .stTextInput>div>div>input {
                 font-size: 20px !important; 
                 font-weight: bold !important;
                 padding: 15px !important;
             }
             
-            /* ขยายปุ่มให้ใหญ่และกดง่าย */
             .stButton>button {
                 width: 100% !important; 
                 height: 65px !important; 
@@ -46,7 +44,7 @@ st.markdown(custom_css, unsafe_allow_html=True)
 # =========================================================
 TARGET_BANK_NAME = "020300995519"
 PRICE_PER_MONTH = 100
-SLIP_AGE_LIMIT_DAYS = 30  
+SLIP_AGE_LIMIT_DAYS = 3  
 # =========================================================
 
 def get_google_spreadsheet():
@@ -191,10 +189,8 @@ def update_member_status(user_input, amount_paid, trans_ref, slip_date, sender_n
 
 # --- UI หลัก (หน้าตาที่แสดงผล) ---
 
-# 🔥 แก้ไขตรงนี้: เพิ่ม margin-top: 40px; เพื่อดันให้ข้อความลงมา ไม่ชิดขอบบนเกินไป
 st.markdown(f"<div style='margin-top: 40px; font-size: 24px; font-weight: bold; margin-bottom: 20px;'>🏦 โอนเงินเข้า: ออมสิน {TARGET_BANK_NAME} (100บ./เดือน)</div>", unsafe_allow_html=True)
 
-# ดึง Member ID อัตโนมัติ
 default_id = ""
 try:
     if hasattr(st, "query_params"):
@@ -236,6 +232,59 @@ if submit_button:
                 if amount is None or amount == "" or float(amount) == 0:
                     st.error("❌ **ระบบไม่สามารถอ่าน QR CODE จากสลิปนี้ได้**\n\nรบกวนส่งรูปสลิปให้แอดมินทางแชทเฟซบุ๊กครับ")
                     st.stop()
+                
+                # =========================================================
+                # 🔥 ระบบตรวจสอบเลขบัญชีผู้รับ (ฉลาดขึ้น รองรับการซ่อนตัวเลขทุกรูปแบบ)
+                # =========================================================
+                receiver_acc = ""
+                try:
+                    receiver_acc = raw.get('receiver', {}).get('account', {}).get('bank', {}).get('account', '')
+                    if not receiver_acc:
+                        rec = slip_result.get('receiver', {})
+                        if isinstance(rec, dict):
+                            receiver_acc = rec.get('account', {}).get('bank', {}).get('account', '')
+                            if not receiver_acc:
+                                receiver_acc = rec.get('account', {}).get('account', '')
+                except:
+                    pass
+
+                clean_target = re.sub(r'[^0-9]', '', TARGET_BANK_NAME)
+                is_valid_account = True
+                
+                # ถ้า API ไม่ส่งเลขบัญชีมาเลย ระบบจะบล็อกเพื่อความปลอดภัย 100%
+                if not receiver_acc or str(receiver_acc).strip() == "":
+                    is_valid_account = False
+                else:
+                    # ดึงกลุ่มตัวเลขทั้งหมดที่โผล่มา (เช่น "x-0203-xx-519" จะได้ ["0203", "519"])
+                    blocks = re.findall(r'\d+', str(receiver_acc))
+                    
+                    if not blocks:
+                        is_valid_account = False
+                    else:
+                        current_pos = 0
+                        total_matched_digits = 0
+                        
+                        for block in blocks:
+                            # ตรวจสอบว่าก้อนตัวเลขนี้ มีอยู่ในบัญชีเป้าหมายหรือไม่ และต้องเรียงลำดับถูก
+                            pos = clean_target.find(block, current_pos)
+                            if pos == -1:
+                                is_valid_account = False
+                                break # ลำดับผิด หรือ ไม่ใช่เลขบัญชีนี้
+                            current_pos = pos + len(block)
+                            total_matched_digits += len(block)
+                            
+                        # ขอให้มีตัวเลขตรงกันอย่างน้อย 3 ตัวขึ้นไป (ครอบคลุมที่บอกว่าเห็นแค่ 3 ตัวท้าย)
+                        if total_matched_digits < 3:
+                            is_valid_account = False
+
+                if not is_valid_account:
+                    st.error(f"❌ **บัญชีผู้รับไม่ถูกต้อง!**\n\nสลิปนี้ไม่ได้โอนเข้าบัญชีออมสิน ({TARGET_BANK_NAME}) ครับ\nหากมั่นใจว่าโอนถูกต้อง รบกวนติดต่อแอดมินครับ")
+                    
+                    with st.expander("🔍 ข้อมูลบัญชีที่อ่านได้จากสลิป (เฉพาะแอดมิน)"):
+                        st.write(f"บัญชีเป้าหมาย: {TARGET_BANK_NAME}")
+                        st.write(f"บัญชีในสลิป: {receiver_acc if receiver_acc else 'ไม่พบข้อมูล'}")
+                    st.stop()
+                # =========================================================
 
                 d = slip_result.get('transDate') or slip_result.get('date') or raw.get('dateTime') or raw.get('transDate') or raw.get('date') or raw.get('sendingBankDate')
                 t = slip_result.get('transTime') or slip_result.get('time') or raw.get('transTime') or raw.get('time')
@@ -263,17 +312,16 @@ if submit_button:
                     too_old, days_passed = is_slip_too_old(str(final_slip_datetime))
                     
                     if too_old:
-                        st.error(f"⛔ **สลิปนี้เก่าเกินไปครับ ({days_passed} วัน)**") 
+                        st.error(f"⛔ **สลิปนี้เก่าเกินไปครับ ({days_passed} วัน / รับไม่เกิน {SLIP_AGE_LIMIT_DAYS} วัน)**") 
                     else:
                         success, msg = update_member_status(user_input, amount, trans_ref, final_slip_datetime, sender_name)
                         if success:
-                            # 🔥 แสดงผลสำเร็จ และทำการหน่วงเวลาเพื่อรีเฟรชระบบ
                             st.success(f"✅ **{msg}**\n\nยอดเงินที่เติม: **{amount} บาท**")
                             st.info("🔄 **กำลังรีเซ็ตฟอร์ม...** (กรุณากดปุ่ม **'อัปเดตสิทธิ์'** ด้านบนเพื่อดูสิทธิ์ล่าสุดครับ)")
                             
-                            time.sleep(4) # หน่วงเวลา 4 วินาทีให้ลูกค้าอ่าน
+                            time.sleep(4) 
                             try:
-                                st.rerun() # รีเซ็ตฟอร์มให้สะอาด
+                                st.rerun() 
                             except:
                                 st.experimental_rerun()
                         else:
