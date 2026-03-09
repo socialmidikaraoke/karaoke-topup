@@ -6,7 +6,6 @@ import os
 from datetime import datetime
 import pytz
 import re
-import time
 
 # =========================================================
 # 🎨 ตั้งค่าหน้าเว็บ และ CSS
@@ -304,16 +303,9 @@ if submit_button:
                     else:
                         success, msg = update_member_status(user_input, amount, trans_ref, final_slip_datetime, sender_name)
                         if success:
+                            # แสดงผลค้างไว้ ไม่สั่งรีเฟรชแล้ว
                             st.success(f"✅ **{msg}**\n\nยอดเงินที่เติม: **{amount} บาท**")
-                            st.info("🔄 **กำลังรีเซ็ตฟอร์ม...** (กรุณากดปุ่ม **'อัปเดตสิทธิ์'** ด้านบนเพื่อดูสิทธิ์ล่าสุดครับ)")
-                            
-                            time.sleep(4) 
-                            
-                            # 🔥 แก้ไขบั๊กการรีเฟรชหน้าเว็บตรงนี้ครับ!
-                            if hasattr(st, "rerun"):
-                                st.rerun()
-                            elif hasattr(st, "experimental_rerun"):
-                                st.experimental_rerun()
+                            st.warning("📌 **อย่าลืม! กรุณากดปุ่ม 'อัปเดตสิทธิ์' (ปุ่มสีเขียวด้านบน)** เพื่อโหลดข้อมูลสิทธิ์การใช้งานล่าสุดของคุณครับ")
                         else:
                             st.error(f"❌ **เกิดข้อผิดพลาด**\n\n{msg}")
             else:
