@@ -270,7 +270,7 @@ if submit_button:
                             is_valid_account = False
 
                 if not is_valid_account:
-                    st.error(f"❌ **บัญชีผู้รับไม่ถูกต้อง!**\n\nสลิปนี้ไม่ได้โอนเข้าบัญชีออมสิน ({TARGET_BANK_NAME}) ครับ\nหากมั่นใจว่าโอนถูกต้อง รบกวนติดต่อแอดมินครับ")
+                    st.error(f"❌ **บัญชีผู้รับไม่ถูกต้อง!**\n\nสลิปนี้อาจโอนผิดบัญชี ({TARGET_BANK_NAME}) ครับ\nหากมั่นใจว่าโอนถูกต้อง รบกวนติดต่อแอดมินครับ")
                     st.stop()
 
                 d = slip_result.get('transDate') or slip_result.get('date') or raw.get('dateTime') or raw.get('transDate') or raw.get('date') or raw.get('sendingBankDate')
@@ -299,7 +299,7 @@ if submit_button:
                     too_old, days_passed = is_slip_too_old(str(final_slip_datetime))
                     
                     if too_old:
-                        st.error(f"⛔ **สลิปนี้เก่าเกินไปครับ ({days_passed} วัน / รับไม่เกิน {SLIP_AGE_LIMIT_DAYS} วัน)**") 
+                        st.error(f"⛔ **สลิปนี้ใช้งานไม่ได้แล้วครับ รบกวนติดต่อแอดมิน**") 
                     else:
                         success, msg = update_member_status(user_input, amount, trans_ref, final_slip_datetime, sender_name)
                         if success:
