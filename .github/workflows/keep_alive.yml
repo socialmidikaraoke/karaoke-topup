@@ -1,0 +1,14 @@
+name: Keep Streamlit Alive
+
+on:
+  schedule:
+    # รันทุกๆ 10 ชั่วโมง (เวลา 00:00, 10:00 และ 20:00 UTC)
+    - cron: "0 */10 * * *"
+  workflow_dispatch: # อนุญาตให้เรากดปุ่ม Run workflow เองได้ด้วย
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Streamlit App
+        run: curl -s https://karaoke-topup-bkj8gdkoukyhtnftogeo7m.streamlit.app > /dev/null
